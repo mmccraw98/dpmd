@@ -1,0 +1,1 @@
+/usr/local/cuda-11.8/bin/nvcc -forward-unknown-to-host-compiler  --generate-code=arch=compute_52,code=[compute_52,sm_52] -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink CMakeFiles/test_device_fields.dir/tests/test_device_fields.cu.o -o CMakeFiles/test_device_fields.dir/cmake_device_link.o  libmd_core.a  -lcurand -lcudadevrt -lcudart_static -lrt -lpthread -ldl 

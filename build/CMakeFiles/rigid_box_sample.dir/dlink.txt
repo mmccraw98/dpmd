@@ -1,0 +1,1 @@
+/usr/local/cuda-11.8/bin/nvcc -forward-unknown-to-host-compiler  --generate-code=arch=compute_52,code=[compute_52,sm_52] -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink CMakeFiles/rigid_box_sample.dir/tests/rigid_box_sample.cu.o -o CMakeFiles/rigid_box_sample.dir/cmake_device_link.o  libmd_core.a  -lcurand -lcudadevrt -lcudart_static -lrt -lpthread -ldl 
