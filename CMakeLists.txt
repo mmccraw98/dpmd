@@ -1,129 +1,108 @@
-# cmake -S . -B build -DMD_DEBUG=0 (off) or 1 (on) && cd build && make -j8
-
+# rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_CUDA_DEBUG=ON .. && make -j8
+# rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA_DEBUG=OFF .. && make -j8
 cmake_minimum_required(VERSION 3.18)
-project(md LANGUAGES C CXX CUDA)
 
-# -----------------------------
-# Options
-# -----------------------------
-option(MD_DEBUG "Enable heavy CUDA debug checks (sync + error after each launch)" OFF)
+# Project setup with CUDA and C languages (C needed for HDF5)
+project(dpmd CUDA CXX C)
 
-# -----------------------------
-# Language & architectures
-# -----------------------------
+# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
-if(NOT CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES 89)  # RTX 4090 (Ada)
-  # set(CMAKE_CUDA_ARCHITECTURES 70;75;80;86;89)  # For compatibility with all gpus on the cluster
-endif()
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# -----------------------------
-# Dependencies
-# -----------------------------
-find_package(HDF5 REQUIRED COMPONENTS C HL)
+# Enable CUDA separable compilation for device linking
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
-# -----------------------------
-# Header-only utilities (include/utils/*.hpp)
-# -----------------------------
-add_library(md_utils INTERFACE)
-target_include_directories(md_utils INTERFACE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-# Prefer imported HDF5 targets if available
-if(TARGET HDF5::C AND TARGET HDF5::HL)
-  target_link_libraries(md_utils INTERFACE HDF5::C HDF5::HL)
+# Debug option for CUDA debugging
+option(ENABLE_CUDA_DEBUG "Enable CUDA debug mode with heavy sync and error checking" OFF)
+
+# Find required packages
+find_package(HDF5 REQUIRED COMPONENTS C)
+
+# CUDA architecture settings - adjust as needed for your hardware
+set(CMAKE_CUDA_ARCHITECTURES "89")
+
+# Include directories
+include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${HDF5_INCLUDE_DIRS})
+
+# CUDA compiler flags
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --extended-lambda")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
+set(CMAKE_CUDA_FLAGS_DEBUG "-g -G -O0")
+set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -DNDEBUG")
+
+# Set MD_DEBUG flag based on option
+if(ENABLE_CUDA_DEBUG)
+    add_compile_definitions(MD_DEBUG=1)
+    message(STATUS "CUDA Debug mode: ENABLED (heavy sync and error checking)")
 else()
-  target_link_libraries(md_utils INTERFACE HDF5::HDF5)
-endif()
-target_compile_options(md_utils INTERFACE
-  $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --use_fast_math>
-)
-
-# MD_DEBUG define is visible to anything that consumes md_utils
-if(MD_DEBUG)
-  target_compile_definitions(md_utils INTERFACE MD_DEBUG=1)
-else()
-  target_compile_definitions(md_utils INTERFACE MD_DEBUG=0)
+    add_compile_definitions(MD_DEBUG=0)
+    message(STATUS "CUDA Debug mode: DISABLED (performance mode)")
 endif()
 
-# -----------------------------
-# Core library (src/*.cu, src/*.cpp)
-# -----------------------------
-file(GLOB_RECURSE MD_CORE_SOURCES
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-)
-add_library(md_core STATIC ${MD_CORE_SOURCES})
-if (MD_CORE_SOURCES STREQUAL "")
-  file(WRITE "${CMAKE_BINARY_DIR}/dummy.cu" "__global__ void __dummy(){}")
-  target_sources(md_core PRIVATE "${CMAKE_BINARY_DIR}/dummy.cu")
-endif()
-
-target_link_libraries(md_core PUBLIC md_utils curand)
-target_include_directories(md_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-set_target_properties(md_core PROPERTIES
-  CUDA_SEPARABLE_COMPILATION ON
-  POSITION_INDEPENDENT_CODE ON
+# Core library sources
+set(CORE_KERNEL_SOURCES
+    src/kernels/common_globals.cu
+    src/kernels/base_point_particle_kernels.cu
+    src/kernels/base_poly_particle_kernels.cu
 )
 
-target_compile_options(md_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+set(CORE_PARTICLE_SOURCES
+    src/particles/disk.cu
+)
 
-# MD_DEBUG only after md_core exists
-if(MD_DEBUG)
-  message(STATUS "Building with MD_DEBUG=ON (CUDA launch sync+checks)")
-  target_compile_definitions(md_core PUBLIC MD_DEBUG=1)
-  # target_compile_options(md_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)  # uncomment for full device debug
-else()
-  message(STATUS "Building with MD_DEBUG=OFF")
-  target_compile_definitions(md_core PUBLIC MD_DEBUG=0)
-endif()
+# Create core library
+add_library(dpmd_core ${CORE_KERNEL_SOURCES} ${CORE_PARTICLE_SOURCES})
 
-# Warnings (C++ only)
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(md_core PUBLIC -Wall -Wextra -Wno-unknown-pragmas)
-endif()
+# Link libraries to core
+target_link_libraries(dpmd_core ${HDF5_LIBRARIES})
 
-# -----------------------------
-# Build type message
-# -----------------------------
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  message(STATUS "CMAKE_BUILD_TYPE=Debug")
-else()
-  message(STATUS "Building in Release (default)")
-endif()
+# Set properties for core library
+set_target_properties(dpmd_core PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+    CUDA_RESOLVE_DEVICE_SYMBOLS ON
+)
 
-# -----------------------------
-# Tests / examples
-# -----------------------------
-add_executable(test_device_fields tests/test_device_fields.cu)
-set_target_properties(test_device_fields PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(test_device_fields PRIVATE md_core)
+# Test executables - handle the reserved "test" name
+set(TEST_SOURCES
+    tests/test_base_particle.cu
+    tests/test_base_point_particle.cu
+    tests/test_base_poly_particle.cu
+    tests/test_device_fields.cu
+    tests/test_disk.cu
+    tests/test_disk_system_naive_parallelism.cu
+    tests/test_disk_system_cell_parallelism.cu
+)
 
-add_executable(test_base_particle tests/test_base_particle.cu)
-set_target_properties(test_base_particle PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(test_base_particle PRIVATE md_core)
+# Create test executables
+foreach(test_source ${TEST_SOURCES})
+    get_filename_component(test_name ${test_source} NAME_WE)
+    
+    add_executable(${test_name} ${test_source})
+    target_link_libraries(${test_name} dpmd_core ${HDF5_LIBRARIES})
+    set_target_properties(${test_name} PROPERTIES
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+endforeach()
 
-add_executable(test_base_point_particle tests/test_base_point_particle.cu)
-set_target_properties(test_base_point_particle PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(test_base_point_particle PRIVATE md_core)
+# Optional: Create install targets
+install(TARGETS dpmd_core
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
 
-add_executable(test_disk tests/test_disk.cu)
-set_target_properties(test_disk PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(test_disk PRIVATE md_core)
+install(DIRECTORY include/
+    DESTINATION include
+    FILES_MATCHING PATTERN "*.hpp" PATTERN "*.cuh"
+)
 
-add_executable(test_disk_system_parallelism tests/test_disk_system_parallelism.cu)
-set_target_properties(test_disk_system_parallelism PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(test_disk_system_parallelism PRIVATE md_core)
+# Optional: Enable testing
+enable_testing()
 
-# add_executable(main tests/main.cu)
-# set_target_properties(main PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-# target_link_libraries(main PRIVATE md_core)
-
-# add_executable(box_sample tests/box_sample.cu)
-# set_target_properties(box_sample PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-# target_link_libraries(box_sample PRIVATE md_core)
-
-# add_executable(rigid_box_sample tests/rigid_box_sample.cu)
-# set_target_properties(rigid_box_sample PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-# target_link_libraries(rigid_box_sample PRIVATE md_core)
+# Add some key tests to CTest
+add_test(NAME test_base_particle COMMAND test_base_particle)
+add_test(NAME test_device_fields COMMAND test_device_fields)
+add_test(NAME test_disk COMMAND test_disk)

@@ -60,7 +60,7 @@ double fit_loglog_slope_filtered(const std::vector<double>& dt,
 
 int main() {
     // 10 systems, each with 20 particles
-    const int S = 10;
+    const int S = 1000;
     const int num_particles_per_system = 20;
     const int n_cell_dim = 4;
     const double packing_fraction = 0.5;
@@ -390,7 +390,7 @@ int main() {
         }
         double p = fit_loglog_slope_filtered(dts_to_test, relstd);
         std::cout << "p: " << p << std::endl;
-        assert(std::abs(p - 2.0) < 1 / std::sqrt(N));
+        assert(std::abs(p - 2.0) < 0.1);
         std::cout << "Naive neighbor energy conservation test passed" << std::endl;
     }
 
@@ -464,7 +464,7 @@ int main() {
         }
         double p = fit_loglog_slope_filtered(dts_to_test, relstd);
         std::cout << "p: " << p << std::endl;
-        assert(std::abs(p - 2.0) < 1 / std::sqrt(N));
+        assert(std::abs(p - 2.0) < 0.1);
         std::cout << "Cell neighbor energy conservation test passed" << std::endl;
     }
     

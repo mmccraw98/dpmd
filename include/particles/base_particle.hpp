@@ -77,7 +77,7 @@ public:
             case NeighborMethod::Naive: init_naive_neighbors(); break;
             case NeighborMethod::Cell:  init_cell_neighbors();  break;
         }
-        sync_neighbors();  // sync all neighbor related data
+        sync_neighbors();
         update_neighbors();
     }
 
@@ -137,7 +137,7 @@ public:
     void allocate_systems(int S) {
         box_size.resize(S); box_inv.resize(S); system_size.resize(S); system_offset.resize(S+1);
         packing_fraction.resize(S); pressure.resize(S); temperature.resize(S); pe_total.resize(S); ke_total.resize(S);
-        verlet_skin.resize(S); thresh2.resize(S);
+        verlet_skin.resize(S); thresh2.resize(S); cub_sys_agg.resize(S);
         derived().allocate_systems_impl(S);
     }
 
@@ -150,6 +150,7 @@ public:
     // Bind system data to device memory
     void sync_system() {
         geo::bind_system_globals(system_offset.ptr(), system_id.ptr(), n_systems(), n_particles(), n_vertices());
+        derived().bind_system_globals_impl();
     }
 
     // Bind neighbor data to device memory
@@ -204,7 +205,7 @@ public:
     void init_cell_neighbors() { enable_swap(true); init_cell_sizes(); sync_cells(); derived().init_cell_neighbors_impl(); }
 
     // Update the cell neighbor list
-    void update_cell_neighbors() { derived().update_cell_neighbors_impl(); sync_cells(); reset_displacements(); }
+    void update_cell_neighbors() { derived().update_cell_neighbors_impl(); sync_cells(); sync_neighbors(); reset_displacements(); }
 
     // Check the cell neighbor list
     void check_cell_neighbors() { if (derived().check_cell_neighbors_impl()) update_cell_neighbors(); }
@@ -369,7 +370,8 @@ protected:
     void reorder_particles_impl() {}
     void reset_displacements_impl() {}
     void compute_ke_impl() {}
-    void allocate_vertices_impl(int) {} 
+    void allocate_vertices_impl(int) {}
+    void bind_system_globals_impl() {}
     int n_vertices_impl() const { return 0; }
 private:
     int _n_cells;

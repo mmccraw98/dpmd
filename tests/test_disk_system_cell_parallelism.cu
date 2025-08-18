@@ -4,12 +4,13 @@
 #include <cmath>
 #include <algorithm>
 
-int main() {
-    // TODO: for some reason, this fails in various places when N (total, including S) is too large (~1e4)
+int main(int argc, char** argv) {
+    // TODO: something causes an illegal memory access in the compute_pair_forces_kernel when N (total across all systems) is large
     const int n_steps = 1000;
-    const int S = 100;
+    // determine S from command line if provided, otherwise default to 10
+    const int S = (argc > 1) ? atoi(argv[1]) : 10;
     const double dt = 1e-2;
-    const int num_particles_per_system = 10;
+    const int num_particles_per_system = 1000;
     const int n_cell_dim = 4;
     const double packing_fraction = 0.5;
     const double rad = 0.5;
@@ -54,7 +55,7 @@ int main() {
 
 
     {  // Test Cell neighbor method
-        std::cout << "Testing Cell neighbor method" << std::endl;
+        std::cout << "Testing Cell neighbor method for S = " << S << " and N = " << N << std::endl;
         md::disk::Disk P;
         P.set_neighbor_method(md::NeighborMethod::Cell); // set this before allocating particles
 
@@ -81,7 +82,7 @@ int main() {
         P.sync_cells();
         P.sync_class_constants();
         P.init_neighbors();
-
+        
         P.compute_forces();
 
         // start the timer
@@ -94,6 +95,7 @@ int main() {
             P.compute_forces();
             P.update_velocities(dt * 0.5);
         }
+        cudaDeviceSynchronize();
 
         // stop the timer
         auto stop = std::chrono::high_resolution_clock::now();

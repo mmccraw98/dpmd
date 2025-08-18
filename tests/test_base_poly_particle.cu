@@ -5,316 +5,206 @@
 #include <vector>
 #include <cuda_runtime.h>
 
-#include "particles/base_point_particle.hpp"
+#include "particles/base_poly_particle.hpp"
 #include "kernels/common.cuh"
 
 namespace md {
 
-// Trivial concrete type: uses BaseParticle defaults and implements a basic reordering
-struct Dummy : BasePointParticle<Dummy> {
-    void reorder_particles_impl() {
-        auto src = thrust::make_zip_iterator(
-            thrust::make_tuple(
-                this->pos.x.begin(), this->pos.y.begin(),
-                this->vel.x.begin(), this->vel.y.begin(),
-                this->force.x.begin(), this->force.y.begin(),
-                this->rad.begin(),
-                this->mass.begin(),
-                this->cell_id.begin()
-            )
-        );
-        auto dst = thrust::make_zip_iterator(
-            thrust::make_tuple(
-                this->pos.x.swap_begin(), this->pos.y.swap_begin(),
-                this->vel.x.swap_begin(), this->vel.y.swap_begin(),
-                this->force.x.swap_begin(), this->force.y.swap_begin(),
-                this->rad.swap_begin(),
-                this->mass.swap_begin(),
-                this->cell_id.swap_begin()
-            )
-        );
-        thrust::gather(this->order.begin(), this->order.end(), src, dst);
-        this->pos.swap(); this->vel.swap(); this->force.swap(); this->rad.swap(); this->mass.swap(); this->cell_id.swap();
-    }
+// Trivial concrete type: uses BaseParticle defaults
+struct Dummy : BasePolyParticle<Dummy> {
+    // Empty for now
 };
+
+// __global__ void test_device_kernel() {
+//     if (threadIdx.x == 0 && blockIdx.x == 0) {
+//         printf("=== Device Constants Check ===\n");
+        
+//         // System constants (md::geo::g_sys)
+//         printf("System Constants:\n");
+//         printf("  g_sys.n_systems = %d\n", md::geo::g_sys.n_systems);
+//         printf("  g_sys.n_particles = %d\n", md::geo::g_sys.n_particles);
+//         printf("  g_sys.n_vertices = %d (should be 600000)\n", md::geo::g_sys.n_vertices);
+//         printf("  g_sys.offset[0] = %d (should be 0)\n", md::geo::g_sys.offset ? md::geo::g_sys.offset[0] : -999);
+//         printf("  g_sys.offset[1] = %d (should be 2)\n", md::geo::g_sys.offset ? md::geo::g_sys.offset[1] : -999);
+//         printf("  g_sys.id[0] = %d (should be 0)\n", md::geo::g_sys.id ? md::geo::g_sys.id[0] : -999);
+        
+//         // Box constants (md::geo::g_box)
+//         printf("\nBox Constants:\n");
+//         printf("  g_box.size_x[0] = %f\n", md::geo::g_box.size_x ? md::geo::g_box.size_x[0] : -999.0);
+//         printf("  g_box.size_y[0] = %f\n", md::geo::g_box.size_y ? md::geo::g_box.size_y[0] : -999.0);
+//         printf("  g_box.inv_x[0] = %f\n", md::geo::g_box.inv_x ? md::geo::g_box.inv_x[0] : -999.0);
+//         printf("  g_box.inv_y[0] = %f\n", md::geo::g_box.inv_y ? md::geo::g_box.inv_y[0] : -999.0);
+        
+//         // Neighbor constants (md::geo::g_neigh)
+//         printf("\nNeighbor Constants:\n");
+//         printf("  g_neigh.start[0] = %d\n", md::geo::g_neigh.start ? md::geo::g_neigh.start[0] : -999);
+//         printf("  g_neigh.start[1] = %d\n", md::geo::g_neigh.start ? md::geo::g_neigh.start[1] : -999);
+//         printf("  g_neigh.skin[0] = %f\n", md::geo::g_neigh.skin ? md::geo::g_neigh.skin[0] : -999.0);
+//         printf("  g_neigh.thresh2[0] = %f\n", md::geo::g_neigh.thresh2 ? md::geo::g_neigh.thresh2[0] : -999.0);
+        
+//         // Cell constants (md::geo::g_cell)
+//         printf("\nCell Constants:\n");
+//         printf("  g_cell.size_x[0] = %f\n", md::geo::g_cell.size_x ? md::geo::g_cell.size_x[0] : -999.0);
+//         printf("  g_cell.size_y[0] = %f\n", md::geo::g_cell.size_y ? md::geo::g_cell.size_y[0] : -999.0);
+//         printf("  g_cell.dim_x[0] = %d\n", md::geo::g_cell.dim_x ? md::geo::g_cell.dim_x[0] : -999);
+//         printf("  g_cell.dim_y[0] = %d\n", md::geo::g_cell.dim_y ? md::geo::g_cell.dim_y[0] : -999);
+//         printf("  g_cell.sys_start[0] = %d\n", md::geo::g_cell.sys_start ? md::geo::g_cell.sys_start[0] : -999);
+        
+//         // Poly constants (md::poly::g_poly)
+//         printf("\nPoly Constants:\n");
+//         printf("  g_poly.particle_id[0] = %d (should be 0)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[0] : -999);
+//         printf("  g_poly.particle_id[1] = %d (should be 0)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[1] : -999);
+//         printf("  g_poly.particle_id[2] = %d (should be 0)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[2] : -999);
+//         printf("  g_poly.particle_id[3] = %d (should be 1)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[3] : -999);
+//         printf("  g_poly.particle_offset[0] = %d (should be 0)\n", md::poly::g_poly.particle_offset ? md::poly::g_poly.particle_offset[0] : -999);
+//         printf("  g_poly.particle_offset[1] = %d (should be 3)\n", md::poly::g_poly.particle_offset ? md::poly::g_poly.particle_offset[1] : -999);
+//         printf("  g_poly.n_vertices_per_particle[0] = %d (should be 3)\n", md::poly::g_poly.n_vertices_per_particle ? md::poly::g_poly.n_vertices_per_particle[0] : -999);
+//         printf("  g_poly.n_vertices_per_particle[1] = %d (should be 3)\n", md::poly::g_poly.n_vertices_per_particle ? md::poly::g_poly.n_vertices_per_particle[1] : -999);
+        
+//         // Vertex system constants (md::poly::g_vertex_sys)
+//         printf("\nVertex System Constants:\n");
+//         printf("  g_vertex_sys.offset[0] = %d (should be 0)\n", md::poly::g_vertex_sys.offset ? md::poly::g_vertex_sys.offset[0] : -999);
+//         printf("  g_vertex_sys.offset[1] = %d (should be 6)\n", md::poly::g_vertex_sys.offset ? md::poly::g_vertex_sys.offset[1] : -999);
+//         printf("  g_vertex_sys.size[0] = %d (should be 6)\n", md::poly::g_vertex_sys.size ? md::poly::g_vertex_sys.size[0] : -999);
+//         printf("  g_vertex_sys.size[1] = %d (should be 6)\n", md::poly::g_vertex_sys.size ? md::poly::g_vertex_sys.size[1] : -999);
+//         printf("  g_vertex_sys.id[0] = %d (should be 0)\n", md::poly::g_vertex_sys.id ? md::poly::g_vertex_sys.id[0] : -999);
+//         printf("  g_vertex_sys.id[5] = %d (should be 0)\n", md::poly::g_vertex_sys.id ? md::poly::g_vertex_sys.id[5] : -999);
+//         printf("  g_vertex_sys.id[6] = %d (should be 1)\n", md::poly::g_vertex_sys.id ? md::poly::g_vertex_sys.id[6] : -999);
+        
+//         printf("=== End Device Constants Check ===\n");
+//     }
+// }
+
 }
 
 int main() {
-    md::Dummy P;
 
-    // Two systems: S=2
-    const int S = 2;
-    const int cell_dim = 4;
-    const int n_cells_per_system = cell_dim * cell_dim;
-    const int N = S * n_cells_per_system;
-    const int num_particles_per_system = N/S;
-    P.allocate_particles(N);
-    P.allocate_systems(S);
+    printf("CUDA device count: ");
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    printf("%d\n", deviceCount);
 
-    double box_size = 10.0;
-    P.box_size.fill(box_size, box_size);
-    P.sync_box();
+    const int S = 100000;
+    const int num_particles_per_system = 2;
+    const double packing_fraction = 0.5;
+    const double rad = 0.5;
+    const double vertex_rad = 0.1;
+    const int num_vertices_per_particle = 3;
+    const double mass = 1.0;
+    const double vertex_mass = mass / num_vertices_per_particle;
+    const double e_interaction = 1.0;
+    const int N = num_particles_per_system * S;
+    const int num_vertices_per_system = num_vertices_per_particle * num_particles_per_system;
+    const int Nv = num_vertices_per_system * S;
+    const double box_size = std::sqrt(num_particles_per_system * M_PI * rad * rad / packing_fraction);
+    const int expected_total_vertex_neighbors = num_vertices_per_particle * (num_particles_per_system - 1) * num_vertices_per_system * S;
+    std::cout << "expected_total_vertex_neighbors: " << expected_total_vertex_neighbors << std::endl;
 
-    const double rad = std::sqrt((0.5 * box_size * box_size) / (M_PI * num_particles_per_system));
-    P.rad.fill(rad);
-    const double verlet_skin = box_size * box_size;  // overestimation to force all possible particles to be neighbors
-    P.verlet_skin.fill(verlet_skin);
+    std::vector<int> host_n_vertices_per_particle(N); // [x]
+    std::vector<int> host_particle_offset(N+1);  // [x]
+    std::vector<int> host_vertex_particle_id(Nv); // [x]
+    std::vector<int> host_vertex_system_id(Nv); // [x]
+    std::vector<int> host_vertex_system_offset(S+1); // [x]
+    std::vector<int> host_vertex_system_size(S); // [x]
+    std::vector<double> host_vertex_pos_x(Nv), host_vertex_pos_y(Nv), host_vertex_force_x(Nv), host_vertex_force_y(Nv), host_vertex_pe(Nv);
+    std::vector<double> host_vertex_mass(Nv); // [x]
+    std::vector<double> host_vertex_rad(Nv); // [x]
 
-    std::vector<double> pos_x(N), pos_y(N);
-    for (int i = 0; i < N; i++) {
-        pos_x[i] = (i % cell_dim) * box_size / cell_dim;
-        pos_y[i] = (i / cell_dim) * box_size / cell_dim;
-    }
-    P.pos.from_host(pos_x, pos_y);
+    std::vector<int> host_neighbor_ids;
+    std::vector<int> host_neighbor_start;
 
-    std::vector<int> system_sizes(S);
-    std::vector<int> system_ids(N);
-    std::vector<int> system_offsets(S+1);
-    for (int i = 0; i < N; i++) {
-        system_ids[i] = std::floor(i / num_particles_per_system);
-        system_sizes[system_ids[i]]++;
-    }
-    system_offsets[0] = 0;
+    std::vector<int> host_system_size(S);  // [x]
+    std::vector<int> host_system_offset(S + 1); // [x]
+    std::vector<double> host_rad(N);  // [x]
+    std::vector<double> host_mass(N);  // [x]
+    std::vector<double> host_e_interaction(S); // [x]
+    std::vector<double> host_box_size(S); // [x]
+    std::vector<int> host_system_id(N); // [x]
+    std::vector<double> host_pos_x(N), host_pos_y(N), host_force_x(N), host_force_y(N), host_pe(N);
+    host_system_offset[0] = 0;
+    host_vertex_system_offset[0] = 0;
+    host_particle_offset[0] = 0;
     for (int i = 0; i < S; i++) {
-        system_offsets[i+1] = system_offsets[i] + system_sizes[i];
-    }
-    P.system_id.from_host(system_ids);
-    P.system_size.from_host(system_sizes);
-    P.system_offset.from_host(system_offsets);
-    P.sync_system();
-
-    // test naive neighbor method
-    P.set_neighbor_method(md::NeighborMethod::Naive);
-    P.init_neighbors();
-
-    std::vector<int> neighbor_ids(P.neighbor_ids.size());
-    std::vector<int> neighbor_counts(N);
-    std::vector<int> neighbor_starts(N+1);
-    P.neighbor_ids.to_host(neighbor_ids);
-    P.neighbor_count.to_host(neighbor_counts);
-    P.neighbor_start.to_host(neighbor_starts);
-    for (int i = 0; i < N; i++) {
-        int theoretical_neighbor_count = num_particles_per_system - 1;
-        // check that the number of neighbors is correct
-        assert(neighbor_counts[i] == theoretical_neighbor_count);
-        std::vector<int> seen_neighbors;
-        for (int j = neighbor_starts[i]; j < neighbor_starts[i+1]; j++) {
-            // check that the particle is not its own neighbor
-            assert(i != neighbor_ids[j]);
-            // check that the particle is in the same system as its neighbor
-            assert(system_ids[i] == system_ids[neighbor_ids[j]]);
-            // check that we haven't seen this neighbor before
-            assert(std::find(seen_neighbors.begin(), seen_neighbors.end(), neighbor_ids[j]) == seen_neighbors.end());
-            seen_neighbors.push_back(neighbor_ids[j]);
-        }
-    }
-    cudaDeviceSynchronize();
-    std::cout << "BasePointParticle naive neighbor method test passed.\n";
-
-    // test cell neighbor method
-    std::vector<int> cell_system_start(S + 1);
-    cell_system_start[0] = 0;
-    for (int i = 0; i < S; i++) {
-        cell_system_start[i+1] = cell_system_start[i] + n_cells_per_system;
-    }
-    P.cell_system_start.from_host(cell_system_start);
-    P.cell_dim.resize(S);
-    P.cell_dim.fill(cell_dim, cell_dim);
-    P.sync_cells();
-    P.set_neighbor_method(md::NeighborMethod::Cell);
-    P.init_neighbors();
-
-    // Pull device data to host
-    std::vector<int> cell_start, order, order_inv, cell_id;
-    cell_start.resize(P.cell_start.size());
-    order.resize(P.order.size());
-    order_inv.resize(P.order_inv.size());
-    cell_id.resize(P.cell_id.size());
-
-    P.cell_start.to_host(cell_start);
-    P.order.to_host(order);
-    P.order_inv.to_host(order_inv);
-    P.cell_id.to_host(cell_id);
-    
-    // compute cell_count from cell_start
-    std::vector<int> cell_count(P.cell_count.size());
-    for (int c=0; c< (int)cell_count.size(); ++c) {
-        cell_count[c] = cell_start[c+1] - cell_start[c];
-    }
-
-    // 1) With 1 particle per cell: every cell_count[c] == 1
-    for (int c=0; c< (int)cell_count.size(); ++c) {
-        assert(cell_count[c] == 1);
-    }
-
-    // 2) cell_start must be [0,1,2,...,C] and cell_start[C] == N
-    const int C = (int)cell_count.size();
-    for (int c=0; c<C; ++c) {
-        assert(cell_start[c] == c);
-    }
-    assert(cell_start[C] == N);
-
-    // 3) order_inv is truly inverse of order
-    for (int new_idx=0; new_idx<N; ++new_idx) {
-        int old_idx = order[new_idx];
-        assert(old_idx >= 0 && old_idx < N);
-        assert(order_inv[old_idx] == new_idx);
-    }
-
-    // 4) Because there is exactly one particle per global cell, and you reorder,
-    //    the reordered cell_id must be strictly increasing: cell_id[new_idx] == new_idx.
-    for (int i=0; i<N; ++i) {
-        assert(cell_id[i] == i);
-    }
-
-    // 5) Neighbor count sanity (9-cell stencil): with 1 per cell, expect 8 neighbors
-    //    provided your cutoff accepts all 8 surrounding cells.
-    std::vector<int> neigh_ct(N);
-    P.neighbor_count.to_host(neigh_ct);
-    for (int i=0; i<N; ++i) {
-        assert(neigh_ct[i] == 8);
-    }
-
-    // 6) Verify reordering is done correctly
-    // make a a new order vector and pair that with redefined rad (set to be in decreasing order)
-    // then sort and verify that rad is then increasing and contains all the original rad values
-    std::vector<int> host_order(N);
-    std::vector<double> host_rad(N);
-    std::vector<int> host_system_start(S+1);
-    P.system_offset.to_host(host_system_start);
-    for (int s_i = 0; s_i < S; s_i++) {
-        int beg = host_system_start[s_i];
-        int end = host_system_start[s_i+1];
-        for (int i = beg; i < end; i++) {
-            host_order[i] = beg + (end - i - 1);
-            host_rad[i] = rad * (end - i);
-        }
-    }
-    P.order.from_host(host_order);
-    P.rad.from_host(host_rad);
-    P.reorder_particles();
-    std::vector<double> host_rad_sorted(N);
-    std::vector<int> host_order_sorted(N);
-    P.order.to_host(host_order_sorted);
-    P.rad.to_host(host_rad_sorted);
-    for (int s_i = 0; s_i < S; s_i++) {
-        int beg = host_system_start[s_i];
-        int end = host_system_start[s_i+1];
-        // check that rad is increasing
-        // check that each rad is unique (no duplicates)
-        // check that each rad is in the original rad vector
-        std::vector<double> seen_rads;
-        for (int i = beg; i < end; i++) {
-            if (i != end-1) {
-                assert(host_rad_sorted[i] < host_rad_sorted[i+1]);
-            }
-            assert(std::find(seen_rads.begin(), seen_rads.end(), host_rad_sorted[i]) == seen_rads.end());
-            seen_rads.push_back(host_rad_sorted[i]);
-            assert(std::find(host_rad.begin(), host_rad.end(), host_rad_sorted[i]) != host_rad.end());
-        }
-    }
-    cudaDeviceSynchronize();
-    std::cout << "BasePointParticle simple cell neighbor method test passed.\n";
-
-    {
-        const int particles_per_cell = 2;
-        const int N2 = particles_per_cell * n_cells_per_system * S;
-        md::Dummy Q;
-        Q.allocate_particles(N2);
-        Q.allocate_systems(S);
-
-        Q.box_size.fill(box_size, box_size);
-        Q.sync_box();
-        Q.rad.fill(rad);
-        Q.verlet_skin.fill(10.0 * box_size * box_size);
-
-        // Build host positions: 2 per global cell
-        std::vector<double> x2(N2), y2(N2);
-        std::vector<int> sys_id2(N2), sys_sizes2(S,0), sys_off2(S+1,0);
-        int idx = 0;
-        for (int sid=0; sid<S; ++sid) {
-            const int nx = (int)std::ceil(std::sqrt(particles_per_cell));
-            const int ny = (particles_per_cell + nx - 1) / nx; // ceil(p/nx)
-            for (int k=0;k<particles_per_cell;++k) {
-                for (int gy=0; gy<cell_dim; ++gy) for (int gx=0; gx<cell_dim; ++gx) {
-                    int kx = k % nx;
-                    int ky = k / nx;
-                    // strictly interior offsets: (kx+0.5)/nx, (ky+0.5)/ny ∈ (0,1)
-                    double u = (gx + (kx + 0.5) / nx) / cell_dim;  // ∈ (gx/cell_dim, (gx+1)/cell_dim)
-                    double v = (gy + (ky + 0.5) / ny) / cell_dim;
-
-                    x2[idx] = u * box_size;
-                    y2[idx] = v * box_size;
-                    sys_id2[idx] = sid;
-                    sys_sizes2[sid]++; idx++;
-                }
+        host_system_size[i] = num_particles_per_system;
+        host_vertex_system_size[i] = num_vertices_per_system;
+        int particle_system_begin = host_system_offset[i];
+        int vertex_system_begin = host_vertex_system_offset[i];
+        host_system_offset[i + 1] = particle_system_begin + num_particles_per_system;
+        host_vertex_system_offset[i + 1] = vertex_system_begin + num_vertices_per_system;
+        host_box_size[i] = box_size;
+        host_e_interaction[i] = e_interaction;
+        for (int j = 0; j < num_particles_per_system; j++) {
+            int particle_id = particle_system_begin + j;
+            host_system_id[particle_id] = i;
+            host_mass[particle_id] = mass;
+            host_rad[particle_id] = rad;
+            host_n_vertices_per_particle[particle_id] = num_vertices_per_particle;
+            host_particle_offset[particle_id + 1] = host_particle_offset[particle_id] + num_vertices_per_particle;
+            for (int k = 0; k < num_vertices_per_particle; k++) {
+                int vertex_id = host_particle_offset[particle_id] + k;
+                host_vertex_particle_id[vertex_id] = particle_id;
+                host_vertex_system_id[vertex_id] = i;
+                host_vertex_mass[vertex_id] = vertex_mass;
+                host_vertex_rad[vertex_id] = vertex_rad;
             }
         }
+    }
 
-        Q.pos.from_host(x2, y2);
-        Q.system_id.from_host(sys_id2);
-        Q.system_size.from_host(sys_sizes2);
-        Q.system_offset.from_host(sys_off2);
-        Q.sync_system();
+    {  // test naive neighbor method
+        md::Dummy P;
+        P.set_neighbor_method(md::NeighborMethod::Naive);
 
-        // Cells (same as before)
-        std::vector<int> cell_sys_start2 = cell_system_start; // reuse from above
-        Q.cell_system_start.from_host(cell_sys_start2);
-        Q.cell_dim.resize(S);
-        Q.cell_dim.fill(cell_dim, cell_dim);
-        Q.sync_cells();
+        P.allocate_systems(S);
+        P.allocate_particles(N);
+        P.allocate_vertices(Nv);
 
-        Q.set_neighbor_method(md::NeighborMethod::Cell);
-        Q.init_neighbors(); // runs full pipeline
+        P.system_id.from_host(host_system_id);
+        P.system_size.from_host(host_system_size);
+        P.system_offset.from_host(host_system_offset);
+        P.box_size.from_host(host_box_size, host_box_size);
+        P.e_interaction.from_host(host_e_interaction);
+        P.n_vertices_per_particle.from_host(host_n_vertices_per_particle);
+        P.particle_offset.from_host(host_particle_offset);
+        P.vertex_particle_id.from_host(host_vertex_particle_id);
+        P.vertex_system_id.from_host(host_vertex_system_id);
+        P.vertex_system_offset.from_host(host_vertex_system_offset);
+        P.vertex_system_size.from_host(host_vertex_system_size);
+        P.vertex_mass.from_host(host_vertex_mass);
+        P.vertex_rad.from_host(host_vertex_rad);
 
-        // Pull cell_start, compute cell_count, verify counts and starts
-        std::vector<int> cs2(Q.cell_start.size()), cc2(Q.cell_count.size());
-        Q.cell_start.to_host(cs2);
-        for (int c=0; c< (int)cc2.size(); ++c) {
-            cc2[c] = cs2[c+1] - cs2[c];
-            assert(cc2[c] == particles_per_cell);
-        }
-        assert(cs2.back() == N2);
+        P.sync_box();
+        P.sync_system();
+        P.sync_neighbors();
+        P.sync_cells();
+        P.sync_class_constants();
 
-        std::vector<int> cell_id2(N2);
-        Q.cell_id.to_host(cell_id2);
-        std::vector<int> cell_dim_x2(S), cell_dim_y2(S);
-        Q.cell_dim.to_host(cell_dim_x2, cell_dim_y2);
+        P.init_neighbors();
 
-        // Neighbor counts: expected = sum counts over 9 cells - 1
-        std::vector<int> neigh_count2(N2); Q.neighbor_count.to_host(neigh_count2);
-        for (int i = 0; i < N2; i++) {
-            const int my_cell = cell_id2[i];
-            const int sid     = sys_id2[i];
-            const int cell_dim_x  = cell_dim_x2[sid];
-            const int cell_dim_y  = cell_dim_y2[sid];
-            const int cell_sys_start = cell_sys_start2[sid];
+        P.neighbor_ids.to_host(host_neighbor_ids);
+        P.neighbor_start.to_host(host_neighbor_start);
 
-            const int local_cell_id = my_cell - cell_sys_start;
-            const int cell_id_x     = local_cell_id % cell_dim_x;
-            const int cell_id_y     = local_cell_id / cell_dim_x;
+        for (int i = 0; i < Nv; i++) {
+            int _n_vertices_in_particle = host_n_vertices_per_particle[host_vertex_particle_id[i]];
+            int _n_vertices_in_system = host_vertex_system_size[host_vertex_system_id[i]];
+            int _n_neighbors = _n_vertices_in_system - _n_vertices_in_particle;
+            int _v_pid = host_vertex_particle_id[i];
+            int _v_sid = host_vertex_system_id[i];
+            int calculated_n_neighbors = host_neighbor_start[i+1] - host_neighbor_start[i];
+            assert(_n_neighbors == calculated_n_neighbors);  // check that the number of neighbors is correct
             std::vector<int> seen_neighbors;
-            int num_neighbors = 0;
-            for (int dy = -1; dy <= 1; ++dy) {
-                int yy = cell_id_y + dy; if (yy < 0) yy += cell_dim_y; else if (yy >= cell_dim_y) yy -= cell_dim_y;
-                for (int dx = -1; dx <= 1; ++dx) {
-                    int xx = cell_id_x + dx; if (xx < 0) xx += cell_dim_x; else if (xx >= cell_dim_x) xx -= cell_dim_x;
-
-                    const int ncell = cell_sys_start + (yy * cell_dim_x + xx);
-                    const int beg   = cs2[ncell];
-                    const int end   = cs2[ncell + 1];
-                    for (int j = beg; j < end; ++j) {
-                        if (j == i) continue;
-                        assert(std::find(seen_neighbors.begin(), seen_neighbors.end(), j) == seen_neighbors.end());
-                        seen_neighbors.push_back(j);
-                        num_neighbors++;
-                    }
-                }
+            for (int j = host_neighbor_start[i]; j < host_neighbor_start[i+1]; j++) {
+                int neighbor_id = host_neighbor_ids[j];
+                assert(neighbor_id < Nv);  // check that neighbor is a valid vertex
+                assert(neighbor_id != i);  // check that neighbor is not the same vertex
+                assert(host_vertex_particle_id[neighbor_id] != _v_pid);  // check that neighbor is not in the same particle
+                assert(host_vertex_system_id[neighbor_id] == _v_sid);  // check that neighbor is in the same system
+                // check that we haven't seen this neighbor before
+                assert(std::find(seen_neighbors.begin(), seen_neighbors.end(), neighbor_id) == seen_neighbors.end());
+                seen_neighbors.push_back(neighbor_id);
             }
-            assert(num_neighbors == neigh_count2[i]);
         }
+        cudaDeviceSynchronize();
+        std::cout << "BasePolyParticle naive neighbor method test passed.\n";
     }
-    cudaDeviceSynchronize();
-    std::cout << "BasePointParticle complex cell neighbor method test passed.\n";
     return 0;
 }

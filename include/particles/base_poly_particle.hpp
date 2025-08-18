@@ -25,7 +25,6 @@ template<class T>
 struct has_allocate_poly_vertex_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().allocate_poly_vertex_extras_impl(0))>> : std::true_type {};
 
-struct has_allocate_poly_system_extras_impl : std::false_type {};
 template<class T, class = void>
 struct has_allocate_poly_system_extras_impl : std::false_type {};
 template<class T>
@@ -60,7 +59,8 @@ public:
     df::DeviceField1D<int>           particle_offset;          // (N+1,) index of the first vertex of each particle
     df::DeviceField1D<int>           vertex_particle_id;       // (Nv,) particle id of each vertex
     df::DeviceField1D<int>           vertex_system_id;         // (Nv,) system id of each vertex
-    df::DeviceField1D<int>           vertex_system_offset;     // (Nv+1,) index of the first vertex of each system
+    df::DeviceField1D<int>           vertex_system_offset;     // (S+1,) index of the first vertex of each system
+    df::DeviceField1D<int>           vertex_system_size;       // (S,) number of vertices in each system
     df::DeviceField2D<double>        vertex_pos;               // (Nv,2) vertex positions
     df::DeviceField2D<double>        vertex_vel;               // (Nv,2) vertex velocities
     df::DeviceField2D<double>        vertex_force;             // (Nv,2) vertex forces
@@ -88,7 +88,7 @@ public:
         this->vertex_mass.resize(Nv);
         this->vertex_rad.resize(Nv);
         this->vertex_particle_id.resize(Nv);
-        this->system_id.resize(Nv);
+        this->vertex_system_id.resize(Nv);
         if constexpr (has_allocate_poly_vertex_extras_impl<Derived>::value)
             this->derived().allocate_poly_vertex_extras_impl(Nv);
     }
@@ -96,7 +96,8 @@ public:
     // Allocate the systems
     void allocate_systems_impl(int S) {
         this->e_interaction.resize(S);
-        this->cub_sys_agg.resize(S);
+        this->vertex_system_offset.resize(S+1);
+        this->vertex_system_size.resize(S);
         if constexpr (has_allocate_poly_system_extras_impl<Derived>::value)
             this->derived().allocate_poly_system_extras_impl(S);
     }
@@ -137,11 +138,11 @@ public:
 
     // Update the naive neighbors (should only be done once per simulation - never needs to be called again)
     void update_naive_neighbors_impl() {
-        int Nv = Base::n_vertices();
+        int Nv = this->n_vertices();
         auto B = md::launch::threads_for();
         auto G = md::launch::blocks_for(Nv);
         // 1) count the neighbors (every particle in system i has system_size[i] - 1 neighbors)
-        CUDA_LAUNCH(md::point::set_naive_neighbor_count, G, B,
+        CUDA_LAUNCH(md::poly::count_naive_vertex_neighbors_kernel, G, B,
             this->neighbor_count.ptr()
         );
         // 2) scan the neighbor counts to get the starting index of each particle's neighbor list
@@ -149,11 +150,11 @@ public:
         // 3) count the total number of neighbors
         int total_neighbors = this->n_neighbors();
         // 4) set start[N] on device
-        this->neighbor_start.set_element(N, total_neighbors);
+        this->neighbor_start.set_element(Nv, total_neighbors);
         // 5) size neighbor_ids
         this->neighbor_ids.resize(total_neighbors);
         // 6) fill neighbor_ids
-        CUDA_LAUNCH(md::point::fill_naive_neighbor_list_kernel, G, B,
+        CUDA_LAUNCH(md::poly::fill_naive_vertex_neighbor_list_kernel, G, B,
             this->neighbor_start.ptr(), this->neighbor_ids.ptr()
         );
     }
@@ -168,11 +169,17 @@ public:
         throw std::runtime_error("BasePolyParticle::update_cell_neighbors_impl is not implemented");
     }
 
-    // Sync class constants with pass-through to sub-class
-    void sync_constants_impl() {
-        md::poly::bind_poly_globals(this->vertex_particle_id.ptr(), this->particle_offset.ptr(), this->vertex_system_id.ptr(), this->vertex_system_offset.ptr());
+    // Sync class constants with pass-through to sub-class for any extra constants
+    void sync_class_constants_impl() {
+        md::poly::bind_poly_globals(this->vertex_particle_id.ptr(), this->particle_offset.ptr(), this->n_vertices_per_particle.ptr());
         if constexpr (has_sync_class_constants_poly_extras_impl<Derived>::value)
             this->derived().sync_class_constants_poly_extras_impl();
+        cudaDeviceSynchronize();
+    }
+
+    // Bind the system constants to the device memory
+    void bind_system_globals_impl() {
+        md::poly::bind_poly_system_globals(this->vertex_system_offset.ptr(), this->vertex_system_id.ptr(), this->vertex_system_size.ptr());
     }
 
     // Return total number of vertices

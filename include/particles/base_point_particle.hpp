@@ -61,7 +61,6 @@ public:
     // Allocate the systems
     void allocate_systems_impl(int S) {
         this->e_interaction.resize(S);
-        this->cub_sys_agg.resize(S);
         if constexpr (has_allocate_point_system_extras_impl<Derived>::value)
             this->derived().allocate_point_system_extras_impl(S);
     }

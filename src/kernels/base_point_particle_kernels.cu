@@ -149,6 +149,15 @@ __global__ void count_cell_neighbors_kernel(
         }
     }
     neighbor_count[i] = count;
+    
+    #if MD_DEBUG
+    if (count > 1000) {  // Warn about unusually high neighbor counts
+        printf("WARNING: particle %d has %d neighbors (very high)\n", i, count);
+    }
+    if (count < 0) {
+        printf("ERROR: particle %d has negative neighbor count %d\n", i, count);
+    }
+    #endif
 }
 
 __global__ void fill_neighbors_cell_kernel(
@@ -196,7 +205,7 @@ __global__ void fill_neighbors_cell_kernel(
             const int end   = cell_start[ncell + 1];
 
             for (int p = beg; p < end; ++p) {
-                const int j  = p;
+                const int j = p;
                 if (j == i) continue;
 
                 const double xj = x[j], yj = y[j], rj = rad[j];
