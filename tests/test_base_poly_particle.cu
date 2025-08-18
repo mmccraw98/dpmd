@@ -15,75 +15,9 @@ struct Dummy : BasePolyParticle<Dummy> {
     // Empty for now
 };
 
-// __global__ void test_device_kernel() {
-//     if (threadIdx.x == 0 && blockIdx.x == 0) {
-//         printf("=== Device Constants Check ===\n");
-        
-//         // System constants (md::geo::g_sys)
-//         printf("System Constants:\n");
-//         printf("  g_sys.n_systems = %d\n", md::geo::g_sys.n_systems);
-//         printf("  g_sys.n_particles = %d\n", md::geo::g_sys.n_particles);
-//         printf("  g_sys.n_vertices = %d (should be 600000)\n", md::geo::g_sys.n_vertices);
-//         printf("  g_sys.offset[0] = %d (should be 0)\n", md::geo::g_sys.offset ? md::geo::g_sys.offset[0] : -999);
-//         printf("  g_sys.offset[1] = %d (should be 2)\n", md::geo::g_sys.offset ? md::geo::g_sys.offset[1] : -999);
-//         printf("  g_sys.id[0] = %d (should be 0)\n", md::geo::g_sys.id ? md::geo::g_sys.id[0] : -999);
-        
-//         // Box constants (md::geo::g_box)
-//         printf("\nBox Constants:\n");
-//         printf("  g_box.size_x[0] = %f\n", md::geo::g_box.size_x ? md::geo::g_box.size_x[0] : -999.0);
-//         printf("  g_box.size_y[0] = %f\n", md::geo::g_box.size_y ? md::geo::g_box.size_y[0] : -999.0);
-//         printf("  g_box.inv_x[0] = %f\n", md::geo::g_box.inv_x ? md::geo::g_box.inv_x[0] : -999.0);
-//         printf("  g_box.inv_y[0] = %f\n", md::geo::g_box.inv_y ? md::geo::g_box.inv_y[0] : -999.0);
-        
-//         // Neighbor constants (md::geo::g_neigh)
-//         printf("\nNeighbor Constants:\n");
-//         printf("  g_neigh.start[0] = %d\n", md::geo::g_neigh.start ? md::geo::g_neigh.start[0] : -999);
-//         printf("  g_neigh.start[1] = %d\n", md::geo::g_neigh.start ? md::geo::g_neigh.start[1] : -999);
-//         printf("  g_neigh.skin[0] = %f\n", md::geo::g_neigh.skin ? md::geo::g_neigh.skin[0] : -999.0);
-//         printf("  g_neigh.thresh2[0] = %f\n", md::geo::g_neigh.thresh2 ? md::geo::g_neigh.thresh2[0] : -999.0);
-        
-//         // Cell constants (md::geo::g_cell)
-//         printf("\nCell Constants:\n");
-//         printf("  g_cell.size_x[0] = %f\n", md::geo::g_cell.size_x ? md::geo::g_cell.size_x[0] : -999.0);
-//         printf("  g_cell.size_y[0] = %f\n", md::geo::g_cell.size_y ? md::geo::g_cell.size_y[0] : -999.0);
-//         printf("  g_cell.dim_x[0] = %d\n", md::geo::g_cell.dim_x ? md::geo::g_cell.dim_x[0] : -999);
-//         printf("  g_cell.dim_y[0] = %d\n", md::geo::g_cell.dim_y ? md::geo::g_cell.dim_y[0] : -999);
-//         printf("  g_cell.sys_start[0] = %d\n", md::geo::g_cell.sys_start ? md::geo::g_cell.sys_start[0] : -999);
-        
-//         // Poly constants (md::poly::g_poly)
-//         printf("\nPoly Constants:\n");
-//         printf("  g_poly.particle_id[0] = %d (should be 0)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[0] : -999);
-//         printf("  g_poly.particle_id[1] = %d (should be 0)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[1] : -999);
-//         printf("  g_poly.particle_id[2] = %d (should be 0)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[2] : -999);
-//         printf("  g_poly.particle_id[3] = %d (should be 1)\n", md::poly::g_poly.particle_id ? md::poly::g_poly.particle_id[3] : -999);
-//         printf("  g_poly.particle_offset[0] = %d (should be 0)\n", md::poly::g_poly.particle_offset ? md::poly::g_poly.particle_offset[0] : -999);
-//         printf("  g_poly.particle_offset[1] = %d (should be 3)\n", md::poly::g_poly.particle_offset ? md::poly::g_poly.particle_offset[1] : -999);
-//         printf("  g_poly.n_vertices_per_particle[0] = %d (should be 3)\n", md::poly::g_poly.n_vertices_per_particle ? md::poly::g_poly.n_vertices_per_particle[0] : -999);
-//         printf("  g_poly.n_vertices_per_particle[1] = %d (should be 3)\n", md::poly::g_poly.n_vertices_per_particle ? md::poly::g_poly.n_vertices_per_particle[1] : -999);
-        
-//         // Vertex system constants (md::poly::g_vertex_sys)
-//         printf("\nVertex System Constants:\n");
-//         printf("  g_vertex_sys.offset[0] = %d (should be 0)\n", md::poly::g_vertex_sys.offset ? md::poly::g_vertex_sys.offset[0] : -999);
-//         printf("  g_vertex_sys.offset[1] = %d (should be 6)\n", md::poly::g_vertex_sys.offset ? md::poly::g_vertex_sys.offset[1] : -999);
-//         printf("  g_vertex_sys.size[0] = %d (should be 6)\n", md::poly::g_vertex_sys.size ? md::poly::g_vertex_sys.size[0] : -999);
-//         printf("  g_vertex_sys.size[1] = %d (should be 6)\n", md::poly::g_vertex_sys.size ? md::poly::g_vertex_sys.size[1] : -999);
-//         printf("  g_vertex_sys.id[0] = %d (should be 0)\n", md::poly::g_vertex_sys.id ? md::poly::g_vertex_sys.id[0] : -999);
-//         printf("  g_vertex_sys.id[5] = %d (should be 0)\n", md::poly::g_vertex_sys.id ? md::poly::g_vertex_sys.id[5] : -999);
-//         printf("  g_vertex_sys.id[6] = %d (should be 1)\n", md::poly::g_vertex_sys.id ? md::poly::g_vertex_sys.id[6] : -999);
-        
-//         printf("=== End Device Constants Check ===\n");
-//     }
-// }
-
 }
 
 int main() {
-
-    printf("CUDA device count: ");
-    int deviceCount;
-    cudaGetDeviceCount(&deviceCount);
-    printf("%d\n", deviceCount);
-
     const int S = 100000;
     const int num_particles_per_system = 2;
     const double packing_fraction = 0.5;
@@ -98,7 +32,6 @@ int main() {
     const int Nv = num_vertices_per_system * S;
     const double box_size = std::sqrt(num_particles_per_system * M_PI * rad * rad / packing_fraction);
     const int expected_total_vertex_neighbors = num_vertices_per_particle * (num_particles_per_system - 1) * num_vertices_per_system * S;
-    std::cout << "expected_total_vertex_neighbors: " << expected_total_vertex_neighbors << std::endl;
 
     std::vector<int> host_n_vertices_per_particle(N); // [x]
     std::vector<int> host_particle_offset(N+1);  // [x]
