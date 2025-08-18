@@ -59,8 +59,6 @@ int main() {
     P.rad.fill(rad);
     const double verlet_skin = box_size * box_size;  // overestimation to force all possible particles to be neighbors
     P.verlet_skin.fill(verlet_skin);
-    const double thresh2 = (0.5 * verlet_skin) * (0.5 * verlet_skin);  // threshold squared for each system for neighbor list rebuild
-    P.thresh2.fill(thresh2);
 
     std::vector<double> pos_x(N), pos_y(N);
     for (int i = 0; i < N; i++) {

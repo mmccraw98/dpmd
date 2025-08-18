@@ -20,15 +20,17 @@ void bind_box_globals(const double* d_box_size_x,
 void bind_system_globals(const int* d_system_offset,
                          const int* d_system_id,
                          int n_systems,
-                         int n_particles) {
-    SystemConst h { d_system_offset, d_system_id, n_systems, n_particles };
+                         int n_particles,
+                         int n_vertices) {
+    SystemConst h { d_system_offset, d_system_id, n_systems, n_particles, n_vertices };
     cudaMemcpyToSymbol(g_sys, &h, sizeof(SystemConst));
 }
 
 void bind_neighbor_globals(const int* d_neighbor_start,
                            const int* d_neighbor_ids,
-                           const double* d_verlet_skin) {
-    NeighborConst h { d_neighbor_start, d_neighbor_ids, d_verlet_skin };
+                           const double* d_verlet_skin,
+                           const double* d_thresh2) {
+    NeighborConst h { d_neighbor_start, d_neighbor_ids, d_verlet_skin, d_thresh2 };
     cudaMemcpyToSymbol(g_neigh, &h, sizeof(NeighborConst));
 }
 

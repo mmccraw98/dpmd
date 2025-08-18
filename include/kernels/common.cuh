@@ -6,7 +6,7 @@
 namespace md { namespace geo {
 
 // -----------------------------
-// Global constants (per-system arrays)
+// Global constants
 // -----------------------------
 struct BoxConst {
     const double* size_x;     // length = n_systems
@@ -20,12 +20,14 @@ struct SystemConst {
     const int*    id;      // length = n_particles
     int           n_systems;
     int           n_particles;
+    int           n_vertices;
 };
 
 struct NeighborConst {
     const int*    start; // length = n_particles+1
     const int*    ids;   // length = total_neighbors
     const double* skin;  // length = n_systems
+    const double* thresh2; // length = n_systems
 };
 
 struct CellConst {
@@ -52,10 +54,12 @@ __host__ void bind_box_globals(const double* d_box_size_x,
 __host__ void bind_system_globals(const int*    d_system_offset,
                                   const int*    d_system_id,
                                   int           n_systems,
-                                  int           n_particles);
+                                  int           n_particles,
+                                  int           n_vertices);
 __host__ void bind_neighbor_globals(const int*    d_neighbor_start,
                                     const int*    d_neighbor_ids,
-                                    const double* d_verlet_skin);
+                                    const double* d_verlet_skin,
+                                    const double* d_thresh2);
 __host__ void bind_cell_globals(const double* d_cell_size_x,
                                 const double* d_cell_size_y,
                                 const double* d_cell_inv_x,

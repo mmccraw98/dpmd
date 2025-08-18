@@ -56,6 +56,7 @@ public:
     
     // System constants
     df::DeviceField1D<double> verlet_skin;       // (S,) - verlet skin for each system
+    df::DeviceField1D<double> thresh2;           // (S,) - threshold squared for each system for neighbor list rebuild
     df::DeviceField1D<double> packing_fraction;  // (S,) - packing fraction for each system
     df::DeviceField1D<double> pressure;          // (S,) - pressure for each system
     df::DeviceField1D<double> temperature;       // (S,) - temperature for each system
@@ -100,6 +101,9 @@ public:
     // Total number of particles
     int n_particles() const { return pos.size(); }
 
+    // Total number of vertices
+    int n_vertices() const { return derived().n_vertices_impl(); }
+
     // Total number of systems
     int n_systems()  const { return box_size.size(); }
 
@@ -121,15 +125,19 @@ public:
     // Allocate particle-level data for total number of particles
     void allocate_particles(int N) {
         pos.resize(N); vel.resize(N); force.resize(N); pe.resize(N); ke.resize(N);
-        system_id.resize(N);
         derived().allocate_particles_impl(N);
+    }
+
+    // Allocate vertex-level data for total number of vertices
+    void allocate_vertices(int Nv) {
+        derived().allocate_vertices_impl(Nv);
     }
 
     // Allocate system-level data for total number of systems
     void allocate_systems(int S) {
         box_size.resize(S); box_inv.resize(S); system_size.resize(S); system_offset.resize(S+1);
         packing_fraction.resize(S); pressure.resize(S); temperature.resize(S); pe_total.resize(S); ke_total.resize(S);
-        verlet_skin.resize(S);
+        verlet_skin.resize(S); thresh2.resize(S);
         derived().allocate_systems_impl(S);
     }
 
@@ -141,12 +149,12 @@ public:
 
     // Bind system data to device memory
     void sync_system() {
-        geo::bind_system_globals(system_offset.ptr(), system_id.ptr(), n_systems(), n_particles());
+        geo::bind_system_globals(system_offset.ptr(), system_id.ptr(), n_systems(), n_particles(), n_vertices());
     }
 
     // Bind neighbor data to device memory
     void sync_neighbors() {
-        geo::bind_neighbor_globals(neighbor_start.ptr(), neighbor_ids.ptr(), verlet_skin.ptr());
+        geo::bind_neighbor_globals(neighbor_start.ptr(), neighbor_ids.ptr(), verlet_skin.ptr(), thresh2.ptr());
     }
 
     // Bind cell data to device memory
@@ -202,7 +210,8 @@ public:
     void check_cell_neighbors() { if (derived().check_cell_neighbors_impl()) update_cell_neighbors(); }
 
     // Reorder the particle data by the order array (or some other internal ordering logic)
-    void reorder_particles() { derived().reorder_particles_impl(); }
+    // resync the class constants after reordering to ensure the globals are updated
+    void reorder_particles() { derived().reorder_particles_impl(); sync_class_constants(); }
 
     // Reset the displacements of the particles to the current positions
     void reset_displacements() { derived().reset_displacements_impl(); }
@@ -360,6 +369,8 @@ protected:
     void reorder_particles_impl() {}
     void reset_displacements_impl() {}
     void compute_ke_impl() {}
+    void allocate_vertices_impl(int) {} 
+    int n_vertices_impl() const { return 0; }
 private:
     int _n_cells;
 };

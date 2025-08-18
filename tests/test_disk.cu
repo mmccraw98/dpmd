@@ -78,6 +78,7 @@ int main() {
     std::vector<double> host_mass(N);
     std::vector<double> host_e_interaction(S);
     std::vector<double> host_skin(S);
+    std::vector<double> host_thresh2(S);
     std::vector<double> host_box_size(S);
     std::vector<int> host_system_id(N);
     std::vector<double> host_pos_x(N), host_pos_y(N), host_force_x(N), host_force_y(N), host_pe(N);
@@ -92,7 +93,8 @@ int main() {
         host_cell_system_start[i + 1] = host_cell_system_start[i] + n_cell_dim * n_cell_dim;
         host_box_size[i] = box_size;
         host_e_interaction[i] = e_interaction;
-        host_skin[i] = 2.0 * rad;  // hows this?
+        host_skin[i] = 2.0 * rad;
+        host_thresh2[i] = (0.5 * host_skin[i]) * (0.5 * host_skin[i]);
         for (int j = 0; j < num_particles_per_system; j++) {
             host_system_id[host_system_start[i] + j] = i;
         }
@@ -115,6 +117,7 @@ int main() {
         P.allocate_particles(N);
 
         P.verlet_skin.from_host(host_skin);
+        P.thresh2.from_host(host_thresh2);
         P.system_id.from_host(host_system_id);
         P.system_size.from_host(host_system_size);
         P.system_offset.from_host(host_system_start);
@@ -181,6 +184,7 @@ int main() {
         P.allocate_particles(N);
 
         P.verlet_skin.from_host(host_skin);
+        P.thresh2.from_host(host_thresh2);
         P.system_id.from_host(host_system_id);
         P.system_size.from_host(host_system_size);
         P.system_offset.from_host(host_system_start);
@@ -273,6 +277,7 @@ int main() {
         P.allocate_particles(N);
 
         P.verlet_skin.from_host(host_skin);
+        P.thresh2.from_host(host_thresh2);
         P.system_id.from_host(host_system_id);
         P.system_size.from_host(host_system_size);
         P.system_offset.from_host(host_system_start);
@@ -324,6 +329,7 @@ int main() {
         P.allocate_particles(N);
 
         P.verlet_skin.from_host(host_skin);
+        P.thresh2.from_host(host_thresh2);
         P.system_id.from_host(host_system_id);
         P.system_size.from_host(host_system_size);
         P.system_offset.from_host(host_system_start);
@@ -397,6 +403,7 @@ int main() {
         P.allocate_particles(N);
 
         P.verlet_skin.from_host(host_skin);
+        P.thresh2.from_host(host_thresh2);
         P.system_id.from_host(host_system_id);
         P.system_size.from_host(host_system_size);
         P.system_offset.from_host(host_system_start);

@@ -51,6 +51,7 @@ public:
 
     // Allocate the particles
     void allocate_particles_impl(int N) {
+        this->system_id.resize(N);
         this->mass.resize(N);
         this->rad.resize(N);
         if constexpr (has_allocate_point_extras_impl<Derived>::value)

@@ -8,26 +8,13 @@ namespace md::disk {
 
 __constant__ DiskConst g_disk;
 
-void bind_disk_globals(const double* d_e_interaction, const double* d_mass, const double* d_rad, unsigned int* d_rebuild_flag, const double* d_thresh2) {
-    DiskConst h { d_e_interaction, d_mass, d_rad, d_rebuild_flag, d_thresh2 };
+void bind_disk_globals(const double* d_e_interaction, const double* d_mass, const double* d_rad, unsigned int* d_rebuild_flag) {
+    DiskConst h { d_e_interaction, d_mass, d_rad, d_rebuild_flag };
     cudaMemcpyToSymbol(g_disk, &h, sizeof(DiskConst));
 }
 
 // Disk-specific kernels
 namespace kernels {
-
-// Calculate the threshold squared for each system
-__global__ void calculate_thresh2_kernel(
-    const double* __restrict__ skin,
-    double* __restrict__ thresh2
-) {
-    const int S = md::geo::g_sys.n_systems;
-    const int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= S) return;
-
-    const double skin_i_half = skin[i] * verlet_skin_to_threshold_factor;
-    thresh2[i] = skin_i_half * skin_i_half;
-}
 
 // Update positions and displacements given velocities and a scale factor - used for cell neighbor list
 __global__ void update_positions_kernel_cell(
@@ -63,7 +50,7 @@ __global__ void update_positions_kernel_cell(
 
     // Determine per-system rebuild flag
     const int sid = md::geo::g_sys.id[i];
-    const double thresh2 = g_disk.thresh2[sid];
+    const double thresh2 = md::geo::g_neigh.thresh2[sid];
     if (d2 > thresh2) atomicOr(&g_disk.rebuild_flag[sid], 1u);
 }
 
@@ -316,14 +303,7 @@ void Disk::update_velocities_impl(double scale) {
 }
 
 void Disk::sync_class_constants_impl() {
-    auto B = md::launch::threads_for();
-    auto G = md::launch::blocks_for(this->n_systems());
-    CUDA_LAUNCH(kernels::calculate_thresh2_kernel, G, B,
-        this->verlet_skin.ptr(),
-        this->thresh2.ptr()
-    );
-    cudaDeviceSynchronize();
-    bind_disk_globals(this->e_interaction.ptr(), this->mass.ptr(), this->rad.ptr(), this->rebuild_flag.ptr(), this->thresh2.ptr());
+    bind_disk_globals(this->e_interaction.ptr(), this->mass.ptr(), this->rad.ptr(), this->rebuild_flag.ptr());
 }
 
 void Disk::reset_displacements_impl() {

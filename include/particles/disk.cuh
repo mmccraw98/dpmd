@@ -4,15 +4,12 @@
 
 namespace md::disk {
 
-inline constexpr double verlet_skin_to_threshold_factor = 0.5;  // rebuild the neighbor list when displacement is half the verlet skin
-
 // ---- Disk-specific constants ----
 struct DiskConst {
     const double* e_interaction;
     const double* mass;
     const double* rad;
     unsigned int* rebuild_flag;
-    const double* thresh2;
 };
 
 // Disk-specific device constants
@@ -32,7 +29,6 @@ public:
     df::DeviceField2D<double>       last_pos;     // (N,2) - positions of the particles when neighbor list was last built
     df::DeviceField1D<double>       disp2;        // (N,) - displacement squared since last pos was written
     df::DeviceField1D<unsigned int> rebuild_flag; // (S,) - rebuild flag for each system
-    df::DeviceField1D<double>       thresh2;      // (S,) - threshold squared for each system for neighbor list rebuild
 
     // Compute the pairwise forces on the particles
     void compute_forces_impl();
@@ -68,7 +64,6 @@ public:
     void allocate_point_system_extras_impl(int S) {
         this->rebuild_flag.resize(S);
         this->rebuild_flag.fill(0u);
-        this->thresh2.resize(S);
     }
 
     // Enable/disable the swap for the point particle system - nothing extra for disks

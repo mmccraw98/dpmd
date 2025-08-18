@@ -1,9 +1,11 @@
 // TODO: finish box sampling protocol
+// TODO: add size verification function - check that all n_particle length arrays are the same length and whatnot
 // TODO: fix the system-sizing issue (for N total (across all systems) > 1e4, things start breaking)
 // TODO: add box resizing - needs to sync with cell sizes and resize particle positions
 // TODO: add fast data output
 // TODO: design a system for getting arbitrary data and running arbitrary functions from particle object
-// TODO: add size verification function - check that all n_particle length arrays are the same length and whatnot
+
+// TODO: add more tests to base particle (ke and pe sums, n_vertices, n_particles, n_systems, etc) and base point particle
 
 // TODO: profile standard vs bucket cell building in the point particles
 // TODO: profile kernel size
