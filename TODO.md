@@ -12,6 +12,7 @@
 // TODO: build system-concatenated data from separate data inputs
 
 // Later:
+// TODO: implement a morton or hilbert based cell list stencil
 // TODO: overhaul job manager
 //      - non-blocking job db - cannot crash if mulitple accesses occur
 //      - break jobs into blocks (initialization, program run, post process)

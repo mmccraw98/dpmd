@@ -1,6 +1,6 @@
 #pragma once
 #include "particles/base_particle.hpp"
-#include "kernels/base_point_particle_kernels.cuh"
+// #include "kernels/base_point_particle_kernels.cuh"
 #include <cub/device/device_segmented_reduce.cuh>
 #include <thrust/binary_search.h>
 #include <thrust/transform.h>
@@ -36,16 +36,24 @@ namespace md {
 // Enum for the different cell sort methods
 enum class CellSortMethod { Bucket, Standard };
 
+// cell list is not reordered for the upper and lower stencil cells
+
 // Base class for point particles
 template<class Derived>
 class BasePointParticle : public BaseParticle<Derived> {
 public:
     using Base = BaseParticle<Derived>;
 
-    df::DeviceField1D<double>        e_interaction;  // (S,) interaction energy
-    df::DeviceField1D<double>        mass;           // (N,) mass
-    df::DeviceField1D<double>        rad;            // (N,) radius
-    df::DeviceField1D<int>           cell_aux;       // (C,) auxiliary data for each cell
+    df::DeviceField1D<double>        e_interaction;            // (S,) interaction energy
+    df::DeviceField1D<int>           n_vertices_per_particle;  // (N,) number of vertices per particle
+    df::DeviceField1D<double>        particle_offset;          // (N+1,) index of the first vertex of each particle
+    df::DeviceField2D<double>        vertex_pos;               // (Nv,2) vertex positions
+    df::DeviceField2D<double>        vertex_vel;               // (Nv,2) vertex velocities
+    df::DeviceField2D<double>        vertex_force;             // (Nv,2) vertex forces
+    df::DeviceField1D<double>        vertex_pe;                // (Nv,) vertex potential energy
+    df::DeviceField1D<double>        vertex_mass;              // (Nv,) mass
+    df::DeviceField1D<double>        vertex_rad;               // (Nv,) radius
+    df::DeviceField1D<int>           cell_aux;                 // (C,) auxiliary data for each cell
 
     inline static constexpr CellSortMethod cell_sort_method = CellSortMethod::Bucket;  // default sort method for the cell list
 
@@ -149,6 +157,72 @@ public:
         this->_fill_cell_neighbors();
     }
 
+    // Compute the total potential energy of each system
+    void compute_pe_total_impl() {
+        cudaStream_t stream = 0;
+        const int S = this->n_systems();
+
+        void* d_temp = this->cub_sys_agg.ptr();
+        size_t temp_bytes = this->cub_sys_agg.size();
+
+        // 1) size request
+        cub::DeviceSegmentedReduce::Sum(
+            nullptr, temp_bytes,
+            this->pe.ptr(), this->pe_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+
+        // 2) ensure workspace
+        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
+            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+            d_temp = this->cub_sys_agg.ptr();
+        }
+
+        // 3) run
+        cub::DeviceSegmentedReduce::Sum(
+            d_temp, temp_bytes,
+            this->pe.ptr(), this->pe_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+    }
+
+    // Compute the kinetic energy of each system
+    void compute_ke_total_impl() {
+        Base::compute_ke();  // compute the kinetic energy of each particle
+        cudaStream_t stream = 0;
+        const int S = this->n_systems();
+
+        void* d_temp = this->cub_sys_agg.ptr();
+        size_t temp_bytes = this->cub_sys_agg.size();
+
+        // 1) size request
+        cub::DeviceSegmentedReduce::Sum(
+            nullptr, temp_bytes,
+            this->ke.ptr(), this->ke_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+
+        // 2) ensure workspace
+        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
+            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+            d_temp = this->cub_sys_agg.ptr();
+        }
+
+        // 3) run
+        cub::DeviceSegmentedReduce::Sum(
+            d_temp, temp_bytes,
+            this->ke.ptr(), this->ke_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+    }
 
 private:
     // Assign global cell ids to each particle based on their position + the system cell offsets

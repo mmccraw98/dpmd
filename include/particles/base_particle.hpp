@@ -7,6 +7,7 @@
 #include <thrust/copy.h>
 #include <thrust/scan.h>
 #include <thrust/reduce.h>
+#include <cub/device/device_segmented_reduce.cuh>
 #include <stdexcept>
 #include <cstddef>
 
@@ -44,9 +45,10 @@ public:
 
 
     // System fields
-    df::DeviceField1D<int>    system_id;         // (N,) — assumed static - effectively true if systems arent permuted
-    df::DeviceField1D<int>    system_size;       // (S,) - number of particles in each system
-    df::DeviceField1D<int>    system_offset;     // (S+1) - starting index of the particles in each system
+    df::DeviceField1D<int>    system_id;             // (N,) — assumed static - effectively true if systems arent permuted
+    df::DeviceField1D<int>    system_size;           // (S,) - number of particles in each system
+    df::DeviceField1D<int>    system_offset;         // (S+1) - starting index of the particles in each system
+    df::DeviceField1D<unsigned char> cub_sys_agg;    // (S,) temporary field for system-level aggregation
     
     // Box fields
     df::DeviceField2D<double> box_size;          // (S,2) [Lx,Ly] - size of the box for each system
@@ -208,12 +210,6 @@ public:
     // Compute the kinetic energy of each particle
     void compute_ke() { derived().compute_ke_impl(); }
 
-    // Compute the total potential energy of each system
-    void compute_pe_total() { derived().compute_pe_total_impl(); }
-
-    // Compute the total kinetic energy of each system
-    void compute_ke_total() { derived().compute_ke_total_impl(); }
-
     // Initialize box sizes
     void init_box_sizes() {
         if (box_size.size() == 0) {
@@ -274,6 +270,74 @@ public:
         _n_cells = cell_system_start.get_element(n_systems());
     }
 
+    // Compute the total potential energy of each system
+    void compute_pe_total() {
+        cudaStream_t stream = 0;
+        const int S = this->n_systems();
+
+        void* d_temp = this->cub_sys_agg.ptr();
+        size_t temp_bytes = this->cub_sys_agg.size();
+
+        // 1) size request
+        cub::DeviceSegmentedReduce::Sum(
+            nullptr, temp_bytes,
+            this->pe.ptr(), this->pe_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+
+        // 2) ensure workspace
+        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
+            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+            d_temp = this->cub_sys_agg.ptr();
+        }
+
+        // 3) run
+        cub::DeviceSegmentedReduce::Sum(
+            d_temp, temp_bytes,
+            this->pe.ptr(), this->pe_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+    }
+
+    // Compute the kinetic energy of each system
+    void compute_ke_total() {
+        compute_ke();  // compute the kinetic energy of each particle
+        cudaStream_t stream = 0;
+        const int S = this->n_systems();
+
+        void* d_temp = this->cub_sys_agg.ptr();
+        size_t temp_bytes = this->cub_sys_agg.size();
+
+        // 1) size request
+        cub::DeviceSegmentedReduce::Sum(
+            nullptr, temp_bytes,
+            this->ke.ptr(), this->ke_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+
+        // 2) ensure workspace
+        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
+            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+            d_temp = this->cub_sys_agg.ptr();
+        }
+
+        // 3) run
+        cub::DeviceSegmentedReduce::Sum(
+            d_temp, temp_bytes,
+            this->ke.ptr(), this->ke_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+    }
+
+
 protected:
     Derived&       derived()       { return static_cast<Derived&>(*this); }
     const Derived& derived() const { return static_cast<const Derived&>(*this); }
@@ -296,8 +360,6 @@ protected:
     void reorder_particles_impl() {}
     void reset_displacements_impl() {}
     void compute_ke_impl() {}
-    void compute_pe_total_impl() {}
-    void compute_ke_total_impl() {}
 private:
     int _n_cells;
 };
