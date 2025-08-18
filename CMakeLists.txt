@@ -20,8 +20,9 @@ option(ENABLE_CUDA_DEBUG "Enable CUDA debug mode with heavy sync and error check
 # Find required packages
 find_package(HDF5 REQUIRED COMPONENTS C)
 
-# CUDA architecture settings - adjust as needed for your hardware
+# CUDA architecture setting
 set(CMAKE_CUDA_ARCHITECTURES "89")
+# set(CMAKE_CUDA_ARCHITECTURES 70;75;80;86;89)  # For compatibility with all gpus on the cluster
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
