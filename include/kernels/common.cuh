@@ -44,7 +44,7 @@ extern __constant__ SystemConst g_sys;
 extern __constant__ NeighborConst g_neigh;
 extern __constant__ CellConst g_cell;
 
-// Host helpers to bind/unbind these globals (defs in common_globals.cu)
+// Host helpers, defined in common_globals.cu
 __host__ void bind_box_globals(const double* d_box_size_x,
                                const double* d_box_size_y,
                                const double* d_box_inv_x,
@@ -63,6 +63,27 @@ __host__ void bind_cell_globals(const double* d_cell_size_x,
                                 const int*    d_cell_dim_x,
                                 const int*    d_cell_dim_y,
                                 const int*    d_cell_system_start);
+
+__global__ void calculate_box_inv_kernel(
+    const double* __restrict__ box_size_x,
+    const double* __restrict__ box_size_y,
+    double*       __restrict__ box_inv_x,
+    double*       __restrict__ box_inv_y,
+    int S
+);
+
+// Calculate the cell size and its inverse for each system
+__global__ void init_cell_sizes_kernel(
+    int S,
+    const double* __restrict__ box_size_x,
+    const double* __restrict__ box_size_y,
+    const int*    __restrict__ cell_dim_x,
+    const int*    __restrict__ cell_dim_y,
+    double*       __restrict__ cell_size_x,
+    double*       __restrict__ cell_size_y,
+    double*       __restrict__ cell_inv_x,
+    double*       __restrict__ cell_inv_y,
+    int*          __restrict__ ncell_out);
 
 // -----------------------------
 // Geometry helpers (ASAP / __forceinline__)
@@ -180,14 +201,6 @@ __device__ __forceinline__ double dist_pbc_global(double xi, double yi,
                                                   double xj, double yj,
                                                   int sid) {
     return sqrt(dist2_pbc_global(xi, yi, xj, yj, sid));
-}
-
-// ---------- Tiny extras commonly useful in force code ----------
-__device__ __forceinline__ double safe_rsqrt(double r2, double eps=1e-18) {
-    return rsqrt(r2 + eps);
-}
-__device__ __forceinline__ double safe_inv(double x, double eps=1e-18) {
-    return 1.0 / (x + eps);
 }
 
 }} // namespace md::geo

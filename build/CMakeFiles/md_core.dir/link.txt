@@ -1,2 +1,2 @@
-/usr/bin/ar qc libmd_core.a CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o CMakeFiles/md_core.dir/src/particles/disk.cu.o CMakeFiles/md_core.dir/src/particles/rigid.cu.o
+/usr/bin/ar qc libmd_core.a CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o CMakeFiles/md_core.dir/src/particles/disk.cu.o CMakeFiles/md_core.dir/src/particles/rigid.cu.o
 /usr/bin/ranlib libmd_core.a

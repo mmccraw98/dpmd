@@ -5,24 +5,6 @@
 #include <iostream>
 #include <vector>
 
-// TODO: add fast data output
-// TODO: finish box sampling protocol
-// TODO: fix cell list
-// TODO: profile speed vs system size and number of particles - how to speed up?  - what is ideal dimension?
-// TODO: design a system for getting arbitrary data and running arbitrary functions from particle object
-// TODO: add box resizing - needs to sync with cell sizes and resize particle positions
-// TODO: add size verification function - check that all n_particle length arrays are the same length and whatnot
-// TODO: refactor base particle
-// TODO: refactor disk
-// TODO: add disk tests
-
-// TODO: build system-concatenated data from separate data inputs
-
-// Later:
-// TODO: overhaul job manager
-//      - non-blocking job db - cannot crash if mulitple accesses occur
-//      - break jobs into blocks (initialization, program run, post process)
-//      - if a block fails, resume it
 
 int main(int argc, char** argv) {
     int n_particles_per_system = 2;

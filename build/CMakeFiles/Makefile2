@@ -65,8 +65,9 @@ CMAKE_BINARY_DIR = /home/mmccraw/dev/dpmd/build
 # The main recursive "all" target.
 all: CMakeFiles/md_core.dir/all
 all: CMakeFiles/test_device_fields.dir/all
-all: CMakeFiles/box_sample.dir/all
-all: CMakeFiles/rigid_box_sample.dir/all
+all: CMakeFiles/test_base_particle.dir/all
+all: CMakeFiles/test_base_point_particle.dir/all
+all: CMakeFiles/test_disk.dir/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
@@ -76,8 +77,9 @@ preinstall:
 # The main recursive "clean" target.
 clean: CMakeFiles/md_core.dir/clean
 clean: CMakeFiles/test_device_fields.dir/clean
-clean: CMakeFiles/box_sample.dir/clean
-clean: CMakeFiles/rigid_box_sample.dir/clean
+clean: CMakeFiles/test_base_particle.dir/clean
+clean: CMakeFiles/test_base_point_particle.dir/clean
+clean: CMakeFiles/test_disk.dir/clean
 .PHONY : clean
 
 #=============================================================================
@@ -87,12 +89,12 @@ clean: CMakeFiles/rigid_box_sample.dir/clean
 CMakeFiles/md_core.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/md_core.dir/build.make CMakeFiles/md_core.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/md_core.dir/build.make CMakeFiles/md_core.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=4,5,6,7 "Built target md_core"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=1,2,3,4,5 "Built target md_core"
 .PHONY : CMakeFiles/md_core.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/md_core.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 4
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 5
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/md_core.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 0
 .PHONY : CMakeFiles/md_core.dir/rule
@@ -113,12 +115,12 @@ CMakeFiles/md_core.dir/clean:
 CMakeFiles/test_device_fields.dir/all: CMakeFiles/md_core.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_device_fields.dir/build.make CMakeFiles/test_device_fields.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_device_fields.dir/build.make CMakeFiles/test_device_fields.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=11,12,13 "Built target test_device_fields"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=12,13,14 "Built target test_device_fields"
 .PHONY : CMakeFiles/test_device_fields.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/test_device_fields.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 7
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 8
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_device_fields.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 0
 .PHONY : CMakeFiles/test_device_fields.dir/rule
@@ -133,56 +135,82 @@ CMakeFiles/test_device_fields.dir/clean:
 .PHONY : CMakeFiles/test_device_fields.dir/clean
 
 #=============================================================================
-# Target rules for target CMakeFiles/box_sample.dir
+# Target rules for target CMakeFiles/test_base_particle.dir
 
 # All Build rule for target.
-CMakeFiles/box_sample.dir/all: CMakeFiles/md_core.dir/all
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/box_sample.dir/build.make CMakeFiles/box_sample.dir/depend
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/box_sample.dir/build.make CMakeFiles/box_sample.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=1,2,3 "Built target box_sample"
-.PHONY : CMakeFiles/box_sample.dir/all
+CMakeFiles/test_base_particle.dir/all: CMakeFiles/md_core.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_particle.dir/build.make CMakeFiles/test_base_particle.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_particle.dir/build.make CMakeFiles/test_base_particle.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=6,7,8 "Built target test_base_particle"
+.PHONY : CMakeFiles/test_base_particle.dir/all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/box_sample.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 7
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/box_sample.dir/all
+CMakeFiles/test_base_particle.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 8
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_base_particle.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 0
-.PHONY : CMakeFiles/box_sample.dir/rule
+.PHONY : CMakeFiles/test_base_particle.dir/rule
 
 # Convenience name for target.
-box_sample: CMakeFiles/box_sample.dir/rule
-.PHONY : box_sample
+test_base_particle: CMakeFiles/test_base_particle.dir/rule
+.PHONY : test_base_particle
 
 # clean rule for target.
-CMakeFiles/box_sample.dir/clean:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/box_sample.dir/build.make CMakeFiles/box_sample.dir/clean
-.PHONY : CMakeFiles/box_sample.dir/clean
+CMakeFiles/test_base_particle.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_particle.dir/build.make CMakeFiles/test_base_particle.dir/clean
+.PHONY : CMakeFiles/test_base_particle.dir/clean
 
 #=============================================================================
-# Target rules for target CMakeFiles/rigid_box_sample.dir
+# Target rules for target CMakeFiles/test_base_point_particle.dir
 
 # All Build rule for target.
-CMakeFiles/rigid_box_sample.dir/all: CMakeFiles/md_core.dir/all
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rigid_box_sample.dir/build.make CMakeFiles/rigid_box_sample.dir/depend
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rigid_box_sample.dir/build.make CMakeFiles/rigid_box_sample.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=8,9,10 "Built target rigid_box_sample"
-.PHONY : CMakeFiles/rigid_box_sample.dir/all
+CMakeFiles/test_base_point_particle.dir/all: CMakeFiles/md_core.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_point_particle.dir/build.make CMakeFiles/test_base_point_particle.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_point_particle.dir/build.make CMakeFiles/test_base_point_particle.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=9,10,11 "Built target test_base_point_particle"
+.PHONY : CMakeFiles/test_base_point_particle.dir/all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/rigid_box_sample.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 7
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/rigid_box_sample.dir/all
+CMakeFiles/test_base_point_particle.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 8
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_base_point_particle.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 0
-.PHONY : CMakeFiles/rigid_box_sample.dir/rule
+.PHONY : CMakeFiles/test_base_point_particle.dir/rule
 
 # Convenience name for target.
-rigid_box_sample: CMakeFiles/rigid_box_sample.dir/rule
-.PHONY : rigid_box_sample
+test_base_point_particle: CMakeFiles/test_base_point_particle.dir/rule
+.PHONY : test_base_point_particle
 
 # clean rule for target.
-CMakeFiles/rigid_box_sample.dir/clean:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rigid_box_sample.dir/build.make CMakeFiles/rigid_box_sample.dir/clean
-.PHONY : CMakeFiles/rigid_box_sample.dir/clean
+CMakeFiles/test_base_point_particle.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_point_particle.dir/build.make CMakeFiles/test_base_point_particle.dir/clean
+.PHONY : CMakeFiles/test_base_point_particle.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/test_disk.dir
+
+# All Build rule for target.
+CMakeFiles/test_disk.dir/all: CMakeFiles/md_core.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_disk.dir/build.make CMakeFiles/test_disk.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_disk.dir/build.make CMakeFiles/test_disk.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=15,16,17 "Built target test_disk"
+.PHONY : CMakeFiles/test_disk.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/test_disk.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 8
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_disk.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/mmccraw/dev/dpmd/build/CMakeFiles 0
+.PHONY : CMakeFiles/test_disk.dir/rule
+
+# Convenience name for target.
+test_disk: CMakeFiles/test_disk.dir/rule
+.PHONY : test_disk
+
+# clean rule for target.
+CMakeFiles/test_disk.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_disk.dir/build.make CMakeFiles/test_disk.dir/clean
+.PHONY : CMakeFiles/test_disk.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

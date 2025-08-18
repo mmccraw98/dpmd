@@ -929,10 +929,13 @@ CMakeFiles/test_device_fields.dir/tests/test_device_fields.cu.o: ../tests/test_d
   /usr/local/cuda-11.8/targets/x86_64-linux/include/curand_lognormal.h \
   /usr/local/cuda-11.8/targets/x86_64-linux/include/curand_poisson.h \
   /usr/local/cuda-11.8/targets/x86_64-linux/include/curand_discrete2.h \
+  ../include/kernels/launch_config.cuh \
   /usr/include/c++/11/climits
 
 
 /usr/include/c++/11/climits:
+
+../include/kernels/launch_config.cuh:
 
 /usr/local/cuda-11.8/targets/x86_64-linux/include/curand_normal.h:
 

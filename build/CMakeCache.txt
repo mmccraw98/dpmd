@@ -258,7 +258,7 @@ HDF5_hdf5_hl_LIBRARY_DEBUG:FILEPATH=HDF5_hdf5_hl_LIBRARY_DEBUG-NOTFOUND
 HDF5_hdf5_hl_LIBRARY_RELEASE:FILEPATH=/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5_hl.so
 
 //Enable heavy CUDA debug checks (sync + error after each launch)
-MD_DEBUG:BOOL=0
+MD_DEBUG:BOOL=1
 
 //Value Computed by CMake
 md_BINARY_DIR:STATIC=/home/mmccraw/dev/dpmd/build

@@ -69,10 +69,24 @@ include CMakeFiles/md_core.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/md_core.dir/flags.make
 
+CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o: CMakeFiles/md_core.dir/flags.make
+CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o: ../src/kernels/base_point_particle_kernels.cu
+CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o: CMakeFiles/md_core.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CUDA object CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o"
+	/usr/local/cuda-11.8/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o -MF CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o.d -x cu -dc /home/mmccraw/dev/dpmd/src/kernels/base_point_particle_kernels.cu -o CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o
+
+CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CUDA source to CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.i"
+	$(CMAKE_COMMAND) -E cmake_unimplemented_variable CMAKE_CUDA_CREATE_PREPROCESSED_SOURCE
+
+CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CUDA source to assembly CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.s"
+	$(CMAKE_COMMAND) -E cmake_unimplemented_variable CMAKE_CUDA_CREATE_ASSEMBLY_SOURCE
+
 CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o: CMakeFiles/md_core.dir/flags.make
 CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o: ../src/kernels/common_globals.cu
 CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o: CMakeFiles/md_core.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CUDA object CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CUDA object CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o"
 	/usr/local/cuda-11.8/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o -MF CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o.d -x cu -dc /home/mmccraw/dev/dpmd/src/kernels/common_globals.cu -o CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o
 
 CMakeFiles/md_core.dir/src/kernels/common_globals.cu.i: cmake_force
@@ -86,7 +100,7 @@ CMakeFiles/md_core.dir/src/kernels/common_globals.cu.s: cmake_force
 CMakeFiles/md_core.dir/src/particles/disk.cu.o: CMakeFiles/md_core.dir/flags.make
 CMakeFiles/md_core.dir/src/particles/disk.cu.o: ../src/particles/disk.cu
 CMakeFiles/md_core.dir/src/particles/disk.cu.o: CMakeFiles/md_core.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CUDA object CMakeFiles/md_core.dir/src/particles/disk.cu.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CUDA object CMakeFiles/md_core.dir/src/particles/disk.cu.o"
 	/usr/local/cuda-11.8/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/md_core.dir/src/particles/disk.cu.o -MF CMakeFiles/md_core.dir/src/particles/disk.cu.o.d -x cu -dc /home/mmccraw/dev/dpmd/src/particles/disk.cu -o CMakeFiles/md_core.dir/src/particles/disk.cu.o
 
 CMakeFiles/md_core.dir/src/particles/disk.cu.i: cmake_force
@@ -100,7 +114,7 @@ CMakeFiles/md_core.dir/src/particles/disk.cu.s: cmake_force
 CMakeFiles/md_core.dir/src/particles/rigid.cu.o: CMakeFiles/md_core.dir/flags.make
 CMakeFiles/md_core.dir/src/particles/rigid.cu.o: ../src/particles/rigid.cu
 CMakeFiles/md_core.dir/src/particles/rigid.cu.o: CMakeFiles/md_core.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CUDA object CMakeFiles/md_core.dir/src/particles/rigid.cu.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CUDA object CMakeFiles/md_core.dir/src/particles/rigid.cu.o"
 	/usr/local/cuda-11.8/bin/nvcc -forward-unknown-to-host-compiler $(CUDA_DEFINES) $(CUDA_INCLUDES) $(CUDA_FLAGS) -MD -MT CMakeFiles/md_core.dir/src/particles/rigid.cu.o -MF CMakeFiles/md_core.dir/src/particles/rigid.cu.o.d -x cu -dc /home/mmccraw/dev/dpmd/src/particles/rigid.cu -o CMakeFiles/md_core.dir/src/particles/rigid.cu.o
 
 CMakeFiles/md_core.dir/src/particles/rigid.cu.i: cmake_force
@@ -113,6 +127,7 @@ CMakeFiles/md_core.dir/src/particles/rigid.cu.s: cmake_force
 
 # Object files for target md_core
 md_core_OBJECTS = \
+"CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o" \
 "CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o" \
 "CMakeFiles/md_core.dir/src/particles/disk.cu.o" \
 "CMakeFiles/md_core.dir/src/particles/rigid.cu.o"
@@ -120,12 +135,13 @@ md_core_OBJECTS = \
 # External object files for target md_core
 md_core_EXTERNAL_OBJECTS =
 
+libmd_core.a: CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o
 libmd_core.a: CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o
 libmd_core.a: CMakeFiles/md_core.dir/src/particles/disk.cu.o
 libmd_core.a: CMakeFiles/md_core.dir/src/particles/rigid.cu.o
 libmd_core.a: CMakeFiles/md_core.dir/build.make
 libmd_core.a: CMakeFiles/md_core.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Linking CUDA static library libmd_core.a"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/mmccraw/dev/dpmd/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Linking CUDA static library libmd_core.a"
 	$(CMAKE_COMMAND) -P CMakeFiles/md_core.dir/cmake_clean_target.cmake
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/md_core.dir/link.txt --verbose=$(VERBOSE)
 

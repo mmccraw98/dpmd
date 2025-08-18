@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 #include "kernels/common.cuh"
+#include "utils/cuda_debug.hpp"
 
 namespace md { namespace geo {
 
@@ -41,6 +42,57 @@ void bind_cell_globals(const double* d_cell_size_x,
     CellConst h { d_cell_size_x, d_cell_size_y, d_cell_inv_x, d_cell_inv_y,
                   d_cell_dim_x, d_cell_dim_y, d_cell_system_start };
     cudaMemcpyToSymbol(g_cell, &h, sizeof(CellConst));
+}
+
+__global__ void calculate_box_inv_kernel(
+    const double* __restrict__ box_size_x,
+    const double* __restrict__ box_size_y,
+    double*       __restrict__ box_inv_x,
+    double*       __restrict__ box_inv_y,
+    int S
+) {
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    if (s >= S) return;
+
+    const double lx = box_size_x[s];
+    const double ly = box_size_y[s];
+
+    box_inv_x[s] = (lx > 0.0) ? (1.0 / lx) : 0.0;
+    box_inv_y[s] = (ly > 0.0) ? (1.0 / ly) : 0.0;
+}
+
+// Calculate the cell size and its inverse for each system
+__global__ void init_cell_sizes_kernel(
+    int S,
+    const double* __restrict__ box_size_x,
+    const double* __restrict__ box_size_y,
+    const int*    __restrict__ cell_dim_x,
+    const int*    __restrict__ cell_dim_y,
+    double*       __restrict__ cell_size_x,
+    double*       __restrict__ cell_size_y,
+    double*       __restrict__ cell_inv_x,
+    double*       __restrict__ cell_inv_y,
+    int*          __restrict__ ncell_out)
+{
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    if (s >= S) return;
+
+    const double lx = box_size_x[s];
+    const double ly = box_size_y[s];
+    const int    nx = cell_dim_x[s];
+    const int    ny = cell_dim_y[s];
+
+    // cell sizes and inverses (guard nx/ny)
+    const double csx = (nx > 0) ? (lx / nx) : 0.0;
+    const double csy = (ny > 0) ? (ly / ny) : 0.0;
+
+    cell_size_x[s]   = csx;
+    cell_size_y[s]   = csy;
+    cell_inv_x[s]    = (csx > 0.0) ? (1.0 / csx) : 0.0;
+    cell_inv_y[s]    = (csy > 0.0) ? (1.0 / csy) : 0.0;
+
+    // per-system number of cells
+    ncell_out[s] = nx * ny;
 }
 
 }} // namespace md::geo

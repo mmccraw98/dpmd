@@ -1,6 +1,7 @@
 /home/mmccraw/dev/dpmd/build/CMakeFiles/md_core.dir
 /home/mmccraw/dev/dpmd/build/CMakeFiles/test_device_fields.dir
-/home/mmccraw/dev/dpmd/build/CMakeFiles/box_sample.dir
-/home/mmccraw/dev/dpmd/build/CMakeFiles/rigid_box_sample.dir
+/home/mmccraw/dev/dpmd/build/CMakeFiles/test_base_particle.dir
+/home/mmccraw/dev/dpmd/build/CMakeFiles/test_base_point_particle.dir
+/home/mmccraw/dev/dpmd/build/CMakeFiles/test_disk.dir
 /home/mmccraw/dev/dpmd/build/CMakeFiles/edit_cache.dir
 /home/mmccraw/dev/dpmd/build/CMakeFiles/rebuild_cache.dir

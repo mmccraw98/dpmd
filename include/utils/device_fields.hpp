@@ -9,6 +9,7 @@
 
 #include <curand_kernel.h>
 #include "utils/cuda_debug.hpp"
+#include "kernels/launch_config.cuh"
 
 #include <vector>
 #include <string>
@@ -20,15 +21,6 @@
 
 namespace df {
 
-
-// Kernel fixed block size
-inline constexpr int kBlock = 256;
-
-// Kernel grid size
-inline int grid_size(int N, int B = kBlock) {
-    int G = (N + B - 1) / B;
-    return (G < 1) ? 1 : G;
-}
 
 // ===============================
 // Low-level device kernels
@@ -357,7 +349,24 @@ struct DeviceField1D {
     T const* ptr_swap() const { return _enable_swap ? swap_buffer.data().get() : nullptr; }
     curandStatePhilox4_32_10_t* ptr_rng()       { return _enable_rng ? rng_states.data().get() : nullptr; }
     curandStatePhilox4_32_10_t const* ptr_rng() const { return _enable_rng ? rng_states.data().get() : nullptr; }
+    auto begin() { return data.begin(); }
+    auto end()   { return data.end(); }
+    auto begin() const { return data.begin(); }
+    auto end()   const { return data.end(); }
+    auto swap_begin() { return swap_buffer.begin(); }
+    auto swap_end()   { return swap_buffer.end(); }
+    auto swap_begin() const { return swap_buffer.begin(); }
+    auto swap_end()   const { return swap_buffer.end(); }
+    auto rng_begin() { return rng_states.begin(); }
+    auto rng_end()   { return rng_states.end(); }
+    auto rng_begin() const { return rng_states.begin(); }
+    auto rng_end()   const { return rng_states.end(); }
     
+    // Set element i to value v
+    void set_element(std::size_t i, T v) {
+        CUDA_CHECK(cudaMemcpy(ptr() + i, &v, sizeof(T), cudaMemcpyHostToDevice));
+    }
+
     // Fetch element i from device to host
     T get_element(std::size_t i) const {
         T h;
@@ -432,51 +441,59 @@ struct DeviceField1D {
 
     // Fill the data with a set value
     void fill(T v){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_fill, G, B, ptr(), size(), v);
     }
 
     // Scale the data with a set value
     void scale(T alpha){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_scale, G, B, ptr(), size(), alpha);
     }
 
     // Statefull RNG (uniform) - requires rng_enabled() = true
     void rand_uniform(T lo, T hi){
         if (!_enable_rng) throw std::runtime_error("DeviceField1D::rand_uniform: enable_rng==false");
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_rand_uniform_1d<T>, G, B, ptr(), size(), ptr_rng(), lo, hi);
     }
 
     // Statefull RNG (normal) - requires rng_enabled() = true
     void rand_normal(T mean, T sigma){
         if (!_enable_rng) throw std::runtime_error("DeviceField1D::rand_normal: enable_rng==false");
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_rand_normal_1d<T>, G, B, ptr(), size(), ptr_rng(), mean, sigma);
     }
 
     // Stateless RNG (uniform)
     void stateless_rand_uniform(T lo, T hi, unsigned long long rng_count){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_uniform_1d<T>, G, B, ptr(), size(), _rng_seed, rng_count, lo, hi);
     }
 
     // Pseudo-stateless RNG (uniform)
     void stateless_rand_uniform(T lo, T hi){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_uniform_1d<T>, G, B, ptr(), size(), _rng_seed, _rng_count++, lo, hi);
     }
 
     // Stateless RNG (normal)
     void stateless_rand_normal(T mean, T sigma, unsigned long long rng_count){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_normal_1d<T>, G, B, ptr(), size(), _rng_seed, rng_count, mean, sigma);
     }
 
     // Pseudo-stateless RNG (normal)
     void stateless_rand_normal(T mean, T sigma){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_normal_1d<T>, G, B, ptr(), size(), _rng_seed, _rng_count++, mean, sigma);
     }
 
@@ -492,7 +509,8 @@ private:
         _rng_seed = seed;
         const size_t need = static_cast<size_t>(size());
         if (rng_states.size() != need) rng_states.resize(need);
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_init_rng_states, G, B, rng_states.data().get(), size(), _rng_seed, subseq_offset);
     }
 };
@@ -554,6 +572,10 @@ struct DeviceField2D {
     T const* yptr_swap() const { return y.ptr_swap(); }
     curandStatePhilox4_32_10_t* ptr_rng2d()       { return _enable_rng ? rng_states.data().get() : nullptr; }
     curandStatePhilox4_32_10_t const* ptr_rng2d() const { return _enable_rng ? rng_states.data().get() : nullptr; }
+    auto rng_begin() { return rng_states.begin(); }
+    auto rng_end()   { return rng_states.end(); }
+    auto rng_begin() const { return rng_states.begin(); }
+    auto rng_end()   const { return rng_states.end(); }
 
     // Reorder data by index vector
     template<class IndexVec>
@@ -561,6 +583,12 @@ struct DeviceField2D {
 
     // Copy data from another DeviceField2D
     void copy_from(const DeviceField2D<T>& other) { x.copy_from(other.x); y.copy_from(other.y); }
+
+    // Set element i to value v
+    void set_element(std::size_t i, T vx, T vy) {
+        x.set_element(i, vx);
+        y.set_element(i, vy);
+    }
 
     // Fetch element i from device to host
     std::pair<T,T> get_element(std::size_t i) const {
@@ -610,7 +638,8 @@ struct DeviceField2D {
     // Statefull RNG (uniform) - requires rng_enabled() = true
     void rand_uniform(T lx, T hx, T ly, T hy){
         if (!_enable_rng) throw std::runtime_error("DeviceField2D::rand_uniform: rng_enabled()==false");
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_rand_uniform_2d_one_state<T>, G, B,
                     xptr(), yptr(), size(),
                     ptr_rng2d(),
@@ -620,7 +649,8 @@ struct DeviceField2D {
     // Statefull RNG (normal) - requires rng_enabled() = true
     void rand_normal(T mx, T sx, T my, T sy){
         if (!_enable_rng) throw std::runtime_error("DeviceField2D::rand_normal: rng_enabled()==false");
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_rand_normal_2d_one_state<T>, G, B,
                     xptr(), yptr(), size(),
                     ptr_rng2d(),
@@ -629,25 +659,29 @@ struct DeviceField2D {
 
     // Stateless RNG (uniform)
     void stateless_rand_uniform(T lx, T hx, T ly, T hy, unsigned long long rng_count){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_uniform_2d<T>, G, B, xptr(), yptr(), size(), _rng_seed, rng_count, lx, hx, ly, hy);
     }
 
     // Pseudo-stateless RNG (uniform)
     void stateless_rand_uniform(T lx, T hx, T ly, T hy){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_uniform_2d<T>, G, B, xptr(), yptr(), size(), _rng_seed, _rng_count++, lx, hx, ly, hy);
     }
 
     // Stateless RNG (normal)
     void stateless_rand_normal(T mx, T sx, T my, T sy, unsigned long long rng_count){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_normal_2d<T>, G, B, xptr(), yptr(), size(), _rng_seed, rng_count, mx, sx, my, sy);
     }
     
     // Pseudo-stateless RNG (normal)
     void stateless_rand_normal(T mx, T sx, T my, T sy){
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_stateless_normal_2d<T>, G, B, xptr(), yptr(), size(), _rng_seed, _rng_count++, mx, sx, my, sy);
     }
 
@@ -661,7 +695,8 @@ private:
         _rng_seed = seed;
         const size_t need = static_cast<size_t>(size());
         if (rng_states.size() != need) rng_states.resize(need);
-        const int B = kBlock; int G = grid_size(size(), B);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(size());
         CUDA_LAUNCH(k_init_rng_states, G, B, rng_states.data().get(), size(), _rng_seed, 0ULL);
     }
 };

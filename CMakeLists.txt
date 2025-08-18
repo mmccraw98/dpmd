@@ -67,15 +67,13 @@ set_target_properties(md_core PROPERTIES
   POSITION_INDEPENDENT_CODE ON
 )
 
-# Always helpful: line info for device code (cheap vs -G)
 target_compile_options(md_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
 
 # MD_DEBUG only after md_core exists
 if(MD_DEBUG)
   message(STATUS "Building with MD_DEBUG=ON (CUDA launch sync+checks)")
   target_compile_definitions(md_core PUBLIC MD_DEBUG=1)
-  # If you ever need full device debug (slow), uncomment:
-  # target_compile_options(md_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)
+  # target_compile_options(md_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)  # uncomment for full device debug
 else()
   message(STATUS "Building with MD_DEBUG=OFF")
   target_compile_definitions(md_core PUBLIC MD_DEBUG=0)
@@ -102,18 +100,26 @@ add_executable(test_device_fields tests/test_device_fields.cu)
 set_target_properties(test_device_fields PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_link_libraries(test_device_fields PRIVATE md_core)
 
-# add_executable(test_base_particles tests/test_base_particles.cu)
-# set_target_properties(test_base_particles PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-# target_link_libraries(test_base_particles PRIVATE md_core)
+add_executable(test_base_particle tests/test_base_particle.cu)
+set_target_properties(test_base_particle PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(test_base_particle PRIVATE md_core)
+
+add_executable(test_base_point_particle tests/test_base_point_particle.cu)
+set_target_properties(test_base_point_particle PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(test_base_point_particle PRIVATE md_core)
+
+add_executable(test_disk tests/test_disk.cu)
+set_target_properties(test_disk PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(test_disk PRIVATE md_core)
 
 # add_executable(main tests/main.cu)
 # set_target_properties(main PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 # target_link_libraries(main PRIVATE md_core)
 
-add_executable(box_sample tests/box_sample.cu)
-set_target_properties(box_sample PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(box_sample PRIVATE md_core)
+# add_executable(box_sample tests/box_sample.cu)
+# set_target_properties(box_sample PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+# target_link_libraries(box_sample PRIVATE md_core)
 
-add_executable(rigid_box_sample tests/rigid_box_sample.cu)
-set_target_properties(rigid_box_sample PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(rigid_box_sample PRIVATE md_core)
+# add_executable(rigid_box_sample tests/rigid_box_sample.cu)
+# set_target_properties(rigid_box_sample PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+# target_link_libraries(rigid_box_sample PRIVATE md_core)

@@ -1,4 +1,6 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o"
+  "CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o.d"
   "CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o"
   "CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o.d"
   "CMakeFiles/md_core.dir/src/particles/disk.cu.o"

@@ -183,7 +183,8 @@ CMakeFiles/md_core.dir/src/particles/disk.cu.o : /home/mmccraw/dev/dpmd/src/part
     /usr/include/c++/11/utility \
     /usr/include/c++/11/bits/stl_relops.h \
     /usr/include/c++/11/initializer_list \
-    /home/mmccraw/dev/dpmd/include/particles/disk.hpp \
+    /home/mmccraw/dev/dpmd/include/particles/disk.cuh \
+    /home/mmccraw/dev/dpmd/include/particles/base_point_particle.hpp \
     /home/mmccraw/dev/dpmd/include/particles/base_particle.hpp \
     /home/mmccraw/dev/dpmd/include/utils/device_fields.hpp \
     /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/device_vector.h \
@@ -923,54 +924,16 @@ CMakeFiles/md_core.dir/src/particles/disk.cu.o : /home/mmccraw/dev/dpmd/src/part
     /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/curand_poisson.h \
     /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/curand_discrete2.h \
     /home/mmccraw/dev/dpmd/include/utils/cuda_debug.hpp \
+    /home/mmccraw/dev/dpmd/include/kernels/launch_config.cuh \
     /usr/include/c++/11/climits \
     /home/mmccraw/dev/dpmd/include/kernels/common.cuh \
     /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/math_constants.h \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/cub.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/block/block_histogram.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/block/specializations/block_histogram_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/block/specializations/block_histogram_atomic.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/block/block_merge_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/thread/thread_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/device_merge_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/dispatch_merge_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/../../agent/agent_merge_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/device_histogram.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/dispatch_histogram.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/../../agent/agent_histogram.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/../../thread/thread_search.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/device_run_length_encode.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/dispatch_rle.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/../../agent/agent_rle.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/device_segmented_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/dispatch_segmented_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/agent/agent_segmented_radix_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/detail/temporary_storage.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/detail/device_double_buffer.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/agent/agent_sub_warp_merge_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/warp/warp_load.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/warp/warp_merge_sort.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/warp/warp_store.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/device_segmented_radix_sort.cuh \
+    /home/mmccraw/dev/dpmd/include/kernels/base_point_particle_kernels.cuh \
     /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/device_segmented_reduce.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/device_spmv.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/dispatch_spmv_orig.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/../../agent/agent_segment_fixup.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/../../agent/agent_spmv_orig.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/device/dispatch/../../agent/../iterator/counting_input_iterator.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/iterator/cache_modified_output_iterator.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/iterator/discard_output_iterator.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/iterator/tex_obj_input_iterator.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/iterator/tex_ref_input_iterator.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/iterator/transform_input_iterator.cuh \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/util_allocator.cuh \
-    /usr/include/c++/11/set \
-    /usr/include/c++/11/bits/stl_tree.h \
-    /usr/include/c++/11/bits/stl_set.h \
-    /usr/include/c++/11/bits/stl_multiset.h \
-    /usr/include/c++/11/map \
-    /usr/include/c++/11/bits/stl_map.h \
-    /usr/include/c++/11/bits/stl_multimap.h \
-    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/cub/host/mutex.cuh \
-    /usr/include/c++/11/mutex \
-    /usr/include/c++/11/bits/unique_lock.h
+    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/binary_search.h \
+    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/detail/binary_search.inl \
+    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/system/detail/generic/binary_search.h \
+    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/system/detail/generic/binary_search.inl \
+    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/system/detail/generic/scalar/binary_search.h \
+    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/system/detail/generic/scalar/binary_search.inl \
+    /usr/local/cuda-11.8/bin/../targets/x86_64-linux/include/thrust/system/detail/adl/binary_search.h

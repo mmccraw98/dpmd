@@ -189,4 +189,6 @@ CMakeFiles/md_core.dir/src/kernels/common_globals.cu.o : /home/mmccraw/dev/dpmd/
     /usr/lib/gcc/x86_64-linux-gnu/11/include/stdint.h \
     /usr/include/stdint.h \
     /usr/include/x86_64-linux-gnu/bits/wchar.h \
-    /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h
+    /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+    /home/mmccraw/dev/dpmd/include/utils/cuda_debug.hpp \
+    /usr/include/c++/11/cstdio

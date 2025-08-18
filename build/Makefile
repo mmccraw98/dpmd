@@ -143,30 +143,67 @@ test_device_fields/fast:
 .PHONY : test_device_fields/fast
 
 #=============================================================================
-# Target rules for targets named box_sample
+# Target rules for targets named test_base_particle
 
 # Build rule for target.
-box_sample: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 box_sample
-.PHONY : box_sample
+test_base_particle: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_base_particle
+.PHONY : test_base_particle
 
 # fast build rule for target.
-box_sample/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/box_sample.dir/build.make CMakeFiles/box_sample.dir/build
-.PHONY : box_sample/fast
+test_base_particle/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_particle.dir/build.make CMakeFiles/test_base_particle.dir/build
+.PHONY : test_base_particle/fast
 
 #=============================================================================
-# Target rules for targets named rigid_box_sample
+# Target rules for targets named test_base_point_particle
 
 # Build rule for target.
-rigid_box_sample: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 rigid_box_sample
-.PHONY : rigid_box_sample
+test_base_point_particle: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_base_point_particle
+.PHONY : test_base_point_particle
 
 # fast build rule for target.
-rigid_box_sample/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rigid_box_sample.dir/build.make CMakeFiles/rigid_box_sample.dir/build
-.PHONY : rigid_box_sample/fast
+test_base_point_particle/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_point_particle.dir/build.make CMakeFiles/test_base_point_particle.dir/build
+.PHONY : test_base_point_particle/fast
+
+#=============================================================================
+# Target rules for targets named test_disk
+
+# Build rule for target.
+test_disk: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_disk
+.PHONY : test_disk
+
+# fast build rule for target.
+test_disk/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_disk.dir/build.make CMakeFiles/test_disk.dir/build
+.PHONY : test_disk/fast
+
+src/kernels/base_point_particle_kernels.o: src/kernels/base_point_particle_kernels.cu.o
+.PHONY : src/kernels/base_point_particle_kernels.o
+
+# target to build an object file
+src/kernels/base_point_particle_kernels.cu.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/md_core.dir/build.make CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.o
+.PHONY : src/kernels/base_point_particle_kernels.cu.o
+
+src/kernels/base_point_particle_kernels.i: src/kernels/base_point_particle_kernels.cu.i
+.PHONY : src/kernels/base_point_particle_kernels.i
+
+# target to preprocess a source file
+src/kernels/base_point_particle_kernels.cu.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/md_core.dir/build.make CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.i
+.PHONY : src/kernels/base_point_particle_kernels.cu.i
+
+src/kernels/base_point_particle_kernels.s: src/kernels/base_point_particle_kernels.cu.s
+.PHONY : src/kernels/base_point_particle_kernels.s
+
+# target to generate assembly for a file
+src/kernels/base_point_particle_kernels.cu.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/md_core.dir/build.make CMakeFiles/md_core.dir/src/kernels/base_point_particle_kernels.cu.s
+.PHONY : src/kernels/base_point_particle_kernels.cu.s
 
 src/kernels/common_globals.o: src/kernels/common_globals.cu.o
 .PHONY : src/kernels/common_globals.o
@@ -240,53 +277,53 @@ src/particles/rigid.cu.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/md_core.dir/build.make CMakeFiles/md_core.dir/src/particles/rigid.cu.s
 .PHONY : src/particles/rigid.cu.s
 
-tests/box_sample.o: tests/box_sample.cu.o
-.PHONY : tests/box_sample.o
+tests/test_base_particle.o: tests/test_base_particle.cu.o
+.PHONY : tests/test_base_particle.o
 
 # target to build an object file
-tests/box_sample.cu.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/box_sample.dir/build.make CMakeFiles/box_sample.dir/tests/box_sample.cu.o
-.PHONY : tests/box_sample.cu.o
+tests/test_base_particle.cu.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_particle.dir/build.make CMakeFiles/test_base_particle.dir/tests/test_base_particle.cu.o
+.PHONY : tests/test_base_particle.cu.o
 
-tests/box_sample.i: tests/box_sample.cu.i
-.PHONY : tests/box_sample.i
+tests/test_base_particle.i: tests/test_base_particle.cu.i
+.PHONY : tests/test_base_particle.i
 
 # target to preprocess a source file
-tests/box_sample.cu.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/box_sample.dir/build.make CMakeFiles/box_sample.dir/tests/box_sample.cu.i
-.PHONY : tests/box_sample.cu.i
+tests/test_base_particle.cu.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_particle.dir/build.make CMakeFiles/test_base_particle.dir/tests/test_base_particle.cu.i
+.PHONY : tests/test_base_particle.cu.i
 
-tests/box_sample.s: tests/box_sample.cu.s
-.PHONY : tests/box_sample.s
+tests/test_base_particle.s: tests/test_base_particle.cu.s
+.PHONY : tests/test_base_particle.s
 
 # target to generate assembly for a file
-tests/box_sample.cu.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/box_sample.dir/build.make CMakeFiles/box_sample.dir/tests/box_sample.cu.s
-.PHONY : tests/box_sample.cu.s
+tests/test_base_particle.cu.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_particle.dir/build.make CMakeFiles/test_base_particle.dir/tests/test_base_particle.cu.s
+.PHONY : tests/test_base_particle.cu.s
 
-tests/rigid_box_sample.o: tests/rigid_box_sample.cu.o
-.PHONY : tests/rigid_box_sample.o
+tests/test_base_point_particle.o: tests/test_base_point_particle.cu.o
+.PHONY : tests/test_base_point_particle.o
 
 # target to build an object file
-tests/rigid_box_sample.cu.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rigid_box_sample.dir/build.make CMakeFiles/rigid_box_sample.dir/tests/rigid_box_sample.cu.o
-.PHONY : tests/rigid_box_sample.cu.o
+tests/test_base_point_particle.cu.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_point_particle.dir/build.make CMakeFiles/test_base_point_particle.dir/tests/test_base_point_particle.cu.o
+.PHONY : tests/test_base_point_particle.cu.o
 
-tests/rigid_box_sample.i: tests/rigid_box_sample.cu.i
-.PHONY : tests/rigid_box_sample.i
+tests/test_base_point_particle.i: tests/test_base_point_particle.cu.i
+.PHONY : tests/test_base_point_particle.i
 
 # target to preprocess a source file
-tests/rigid_box_sample.cu.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rigid_box_sample.dir/build.make CMakeFiles/rigid_box_sample.dir/tests/rigid_box_sample.cu.i
-.PHONY : tests/rigid_box_sample.cu.i
+tests/test_base_point_particle.cu.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_point_particle.dir/build.make CMakeFiles/test_base_point_particle.dir/tests/test_base_point_particle.cu.i
+.PHONY : tests/test_base_point_particle.cu.i
 
-tests/rigid_box_sample.s: tests/rigid_box_sample.cu.s
-.PHONY : tests/rigid_box_sample.s
+tests/test_base_point_particle.s: tests/test_base_point_particle.cu.s
+.PHONY : tests/test_base_point_particle.s
 
 # target to generate assembly for a file
-tests/rigid_box_sample.cu.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rigid_box_sample.dir/build.make CMakeFiles/rigid_box_sample.dir/tests/rigid_box_sample.cu.s
-.PHONY : tests/rigid_box_sample.cu.s
+tests/test_base_point_particle.cu.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_base_point_particle.dir/build.make CMakeFiles/test_base_point_particle.dir/tests/test_base_point_particle.cu.s
+.PHONY : tests/test_base_point_particle.cu.s
 
 tests/test_device_fields.o: tests/test_device_fields.cu.o
 .PHONY : tests/test_device_fields.o
@@ -312,6 +349,30 @@ tests/test_device_fields.cu.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_device_fields.dir/build.make CMakeFiles/test_device_fields.dir/tests/test_device_fields.cu.s
 .PHONY : tests/test_device_fields.cu.s
 
+tests/test_disk.o: tests/test_disk.cu.o
+.PHONY : tests/test_disk.o
+
+# target to build an object file
+tests/test_disk.cu.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_disk.dir/build.make CMakeFiles/test_disk.dir/tests/test_disk.cu.o
+.PHONY : tests/test_disk.cu.o
+
+tests/test_disk.i: tests/test_disk.cu.i
+.PHONY : tests/test_disk.i
+
+# target to preprocess a source file
+tests/test_disk.cu.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_disk.dir/build.make CMakeFiles/test_disk.dir/tests/test_disk.cu.i
+.PHONY : tests/test_disk.cu.i
+
+tests/test_disk.s: tests/test_disk.cu.s
+.PHONY : tests/test_disk.s
+
+# target to generate assembly for a file
+tests/test_disk.cu.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_disk.dir/build.make CMakeFiles/test_disk.dir/tests/test_disk.cu.s
+.PHONY : tests/test_disk.cu.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -320,10 +381,14 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... box_sample"
 	@echo "... md_core"
-	@echo "... rigid_box_sample"
+	@echo "... test_base_particle"
+	@echo "... test_base_point_particle"
 	@echo "... test_device_fields"
+	@echo "... test_disk"
+	@echo "... src/kernels/base_point_particle_kernels.o"
+	@echo "... src/kernels/base_point_particle_kernels.i"
+	@echo "... src/kernels/base_point_particle_kernels.s"
 	@echo "... src/kernels/common_globals.o"
 	@echo "... src/kernels/common_globals.i"
 	@echo "... src/kernels/common_globals.s"
@@ -333,15 +398,18 @@ help:
 	@echo "... src/particles/rigid.o"
 	@echo "... src/particles/rigid.i"
 	@echo "... src/particles/rigid.s"
-	@echo "... tests/box_sample.o"
-	@echo "... tests/box_sample.i"
-	@echo "... tests/box_sample.s"
-	@echo "... tests/rigid_box_sample.o"
-	@echo "... tests/rigid_box_sample.i"
-	@echo "... tests/rigid_box_sample.s"
+	@echo "... tests/test_base_particle.o"
+	@echo "... tests/test_base_particle.i"
+	@echo "... tests/test_base_particle.s"
+	@echo "... tests/test_base_point_particle.o"
+	@echo "... tests/test_base_point_particle.i"
+	@echo "... tests/test_base_point_particle.s"
 	@echo "... tests/test_device_fields.o"
 	@echo "... tests/test_device_fields.i"
 	@echo "... tests/test_device_fields.s"
+	@echo "... tests/test_disk.o"
+	@echo "... tests/test_disk.i"
+	@echo "... tests/test_disk.s"
 .PHONY : help
 
 
