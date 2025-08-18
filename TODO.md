@@ -1,7 +1,7 @@
-// TODO: add box resizing - needs to sync with cell sizes and resize particle positions
-// TODO: add disk tests
-// TODO: add fast data output
 // TODO: finish box sampling protocol
+// TODO: fix the system-sizing issue (for N total (across all systems) > 1e4, things start breaking)
+// TODO: add box resizing - needs to sync with cell sizes and resize particle positions
+// TODO: add fast data output
 // TODO: design a system for getting arbitrary data and running arbitrary functions from particle object
 // TODO: add size verification function - check that all n_particle length arrays are the same length and whatnot
 

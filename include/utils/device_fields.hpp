@@ -38,7 +38,6 @@ __global__ void k_scale(T* __restrict__ a, int N, T alpha){
 }
 
 // Header-safe (non-templated) RNG state init kernel.
-// subseq_offset available if you ever want disjoint substreams.
 static __global__ void k_init_rng_states(curandStatePhilox4_32_10_t* __restrict__ states,
                                          int N,
                                          unsigned long long seed,
@@ -200,6 +199,8 @@ __device__ __forceinline__ float u01f(uint32_t x) {
     constexpr float SCALE = 1.0f / 4294967296.0f;
     return (static_cast<float>(x) + 0.5f) * SCALE;
 }
+
+// Map to (0,1)
 __device__ __forceinline__ double u01d(uint32_t hi, uint32_t lo) {
     uint64_t bits = (static_cast<uint64_t>(hi) << 21) | (static_cast<uint64_t>(lo) >> 11);
     constexpr double SCALE = 1.0 / 9007199254740992.0; // 2^53

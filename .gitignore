@@ -1,0 +1,73 @@
+# Top-level build dirs
+/build/
+/build-*/
+/cmake-build-*/
+
+# CMake (catch in-source builds too)
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+CTestTestfile.cmake
+CTestCustom.cmake
+Testing/
+Makefile
+install_manifest.txt
+compile_commands.json
+
+# Objects, libs, binaries
+*.o
+*.o.d
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+*.exe
+*.out
+*.app
+*.pdb
+*.exp
+*.lo
+*.la
+*.dSYM/
+
+# CUDA intermediates
+*.cubin
+*.fatbin
+*.ptx
+*.module_id
+*.cudafe*
+*.cpp1.ii
+*.cpp4.ii
+*.gpu
+*.reg.c
+*.stub.c
+
+# Logs and profiling
+*.log
+*.nvvp
+*.nvprof
+*.nsys-rep
+*.qdrep
+
+# Python nonsense
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+.venv/
+venv/
+.env
+.env.*
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store

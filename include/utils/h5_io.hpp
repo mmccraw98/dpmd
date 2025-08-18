@@ -8,7 +8,9 @@
 #include <memory>
 #include <cstdint>
 #include <type_traits>
-#include <climits>  // for INT_MAX
+#include <climits>
+
+// WIP:
 
 // ===============================
 // HDF5 helpers
@@ -31,7 +33,7 @@ inline bool h5_link_exists(hid_t loc, const std::string& path) {
 }
 
 // Map C++ types to HDF5 native types
-template<class T> inline hid_t h5_native(); // specializations
+template<class T> inline hid_t h5_native();
 template<> inline hid_t h5_native<float>()                { return H5T_NATIVE_FLOAT; }
 template<> inline hid_t h5_native<double>()               { return H5T_NATIVE_DOUBLE; }
 template<> inline hid_t h5_native<int>()                  { return H5T_NATIVE_INT; }

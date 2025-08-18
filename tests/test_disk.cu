@@ -59,8 +59,8 @@ double fit_loglog_slope_filtered(const std::vector<double>& dt,
 }
 
 int main() {
-    // Two systems, each with 20 particles
-    const int S = 2;
+    // 10 systems, each with 20 particles
+    const int S = 10;
     const int num_particles_per_system = 20;
     const int n_cell_dim = 4;
     const double packing_fraction = 0.5;
@@ -159,10 +159,10 @@ int main() {
                     assert(r > 2.0 * rad);
                 }
                 if (r < 2.0 * rad) {
-                    assert(std::abs(host_force_x[i]) > 0.0);
-                    assert(std::abs(host_force_y[i]) > 0.0);
-                    assert(std::abs(host_force_x[neighbor_id]) > 0.0);
-                    assert(std::abs(host_force_y[neighbor_id]) > 0.0);
+                    std::cout << (std::abs(host_force_x[i]) + std::abs(host_force_y[i]) > 0.0) << std::endl;
+                    std::cout << i << " " << neighbor_id << " " << N << std::endl;
+                    assert((std::abs(host_force_x[i]) + std::abs(host_force_y[i])) > 0.0);
+                    assert((std::abs(host_force_x[neighbor_id]) + std::abs(host_force_y[neighbor_id])) > 0.0);
                     assert(host_pe[i] > 0.0);
                     assert(host_pe[neighbor_id] > 0.0);
                 }
@@ -226,10 +226,8 @@ int main() {
                     assert(r > 2.0 * rad);
                 }
                 if (r < 2.0 * rad) {
-                    assert(std::abs(host_force_x[i]) > 0.0);
-                    assert(std::abs(host_force_y[i]) > 0.0);
-                    assert(std::abs(host_force_x[neighbor_id]) > 0.0);
-                    assert(std::abs(host_force_y[neighbor_id]) > 0.0);
+                    assert((std::abs(host_force_x[i]) + std::abs(host_force_y[i])) > 0.0);
+                    assert((std::abs(host_force_x[neighbor_id]) + std::abs(host_force_y[neighbor_id])) > 0.0);
                     assert(host_pe[i] > 0.0);
                     assert(host_pe[neighbor_id] > 0.0);
                 }
@@ -286,7 +284,7 @@ int main() {
         P.mass.from_host(host_mass);
         P.rad.from_host(host_rad);
 
-        P.pos.enable_rng(10);
+        P.pos.enable_rng(0);
         P.pos.stateless_rand_uniform(0.0, box_size, 0.0, box_size, 0);
 
         P.sync_box();

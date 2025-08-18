@@ -13,7 +13,7 @@
 #include "utils/device_fields.hpp"
 
 // -----------------------------
-// Helpers (from your message)
+// Helpers
 // -----------------------------
 template<typename T>
 bool approx_eq(T a, T b, T rtol, T atol){ return std::fabs(a-b) <= (atol + rtol*std::fabs(b)); }

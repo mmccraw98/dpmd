@@ -112,6 +112,10 @@ add_executable(test_disk tests/test_disk.cu)
 set_target_properties(test_disk PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_link_libraries(test_disk PRIVATE md_core)
 
+add_executable(test_disk_system_parallelism tests/test_disk_system_parallelism.cu)
+set_target_properties(test_disk_system_parallelism PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(test_disk_system_parallelism PRIVATE md_core)
+
 # add_executable(main tests/main.cu)
 # set_target_properties(main PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 # target_link_libraries(main PRIVATE md_core)
