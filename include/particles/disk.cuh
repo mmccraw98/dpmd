@@ -80,6 +80,9 @@ public:
 
     // Compute the kinetic energy of each particle
     void compute_ke_impl();
+
+    // Set random positions within the box
+    void set_random_positions_impl(double box_pad_x, double box_pad_y);
 };
 
 }

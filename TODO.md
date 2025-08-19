@@ -19,6 +19,8 @@
 
 // TODO: atomic restart
 
+// TODO: when setting random positions, may want to add a branch for updating displacements and cell-list rebuild flag or at least enforce a neighbor rebuild?
+
 // Later:
 // TODO: implement a morton or hilbert based cell list stencil
 // TODO: raise certain common methods to higher-level classes (some components of the neighbor list)

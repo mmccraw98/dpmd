@@ -157,6 +157,61 @@ __global__ void compute_particle_forces_kernel(
     pe[i] = pei;
 }
 
+// Set random positions within the box with padding
+// Angle is chosen between 0 and 2pi/Nv to maintain periodicity
+__global__ void set_random_positions_in_box_kernel(
+    curandStatePhilox4_32_10_t* __restrict__ states,
+    double* __restrict__ pos_x,
+    double* __restrict__ pos_y,
+    double* __restrict__ angle,
+    double* __restrict__ vertex_pos_x,
+    double* __restrict__ vertex_pos_y,
+    const double box_pad_x,
+    const double box_pad_y
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+
+    curandStatePhilox4_32_10_t st = states[i];
+
+    const int n_vertices_per_particle = md::poly::g_poly.n_vertices_per_particle[i];
+    const int particle_offset = md::poly::g_poly.particle_offset[i];
+    const int sid = md::geo::g_sys.id[i];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+
+    double pos_xi = pos_x[i];
+    double pos_yi = pos_y[i];
+    double angle_i = angle[i];
+    
+    double new_pos_xi = curand_uniform_double(&st) * (box_size_x - 2 * box_pad_x) + box_pad_x;
+    double new_pos_yi = curand_uniform_double(&st) * (box_size_y - 2 * box_pad_y) + box_pad_y;
+    double angle_period_inv = (n_vertices_per_particle > 1) ? 1.0 / n_vertices_per_particle : 0.0;
+    double new_angle_i = curand_uniform_double(&st) * 2 * M_PI * angle_period_inv;
+
+    double delta_x = new_pos_xi - pos_xi;
+    double delta_y = new_pos_yi - pos_yi;
+    double dtheta = new_angle_i - angle_i;
+
+    double s, c; sincos(dtheta, &s, &c);
+    for (int j = 0; j < n_vertices_per_particle; ++j) {
+        double dx = vertex_pos_x[particle_offset + j] - pos_xi;
+        double dy = vertex_pos_y[particle_offset + j] - pos_yi;
+        double rx = c*dx - s*dy;
+        double ry = s*dx + c*dy;
+        vertex_pos_x[particle_offset + j] = new_pos_xi + rx;
+        vertex_pos_y[particle_offset + j] = new_pos_yi + ry;
+    }
+    
+    pos_x[i] = new_pos_xi;
+    pos_y[i] = new_pos_yi;
+    angle[i] = new_angle_i;
+
+    states[i] = st;
+}
+
+
 } // namespace kernels
 
 void RigidBumpy::compute_particle_forces() {
@@ -241,6 +296,22 @@ void RigidBumpy::allocate_poly_system_extras_impl(int S) {
 void RigidBumpy::enable_poly_swap_extras_impl(bool enable) {
     // throw std::runtime_error("RigidBumpy::enable_poly_swap_extras_impl: not implemented");
     std::cout << "RigidBumpy::enable_poly_swap_extras_impl: not implemented\n";
+}
+
+
+void RigidBumpy::set_random_positions_impl(double box_pad_x, double box_pad_y) {
+    // if (!this->pos.rng_enabled()) { this->pos.enable_rng(); }  // enable RNG if not already enabled
+    // if (!this->pos.rng_enabled()) {
+    //     std::cout << "RigidBumpy::set_random_positions_impl: RNG not enabled\n";
+    //     this->pos.enable_rng();
+    // }
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::set_random_positions_in_box_kernel, G, B,
+        this->pos.rng_states.data().get(),
+        this->pos.xptr(), this->pos.yptr(), this->angle.ptr(),
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(), box_pad_x, box_pad_y);
 }
 
 } // namespace md::rigid_bumpy

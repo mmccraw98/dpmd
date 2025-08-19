@@ -68,7 +68,7 @@ int main() {
 
     P.init_neighbors();
 
-    // SET RANDOM POSITIONS OF THE PARTICLES WITHIN BOX
+    P.set_random_positions();
     P.compute_forces();
     P.compute_particle_forces();
 }

@@ -180,6 +180,9 @@ public:
         derived().enable_swap_impl(enable);
     }
 
+    // Set random positions within the box with padding defaulting to 0.0
+    void set_random_positions(double box_pad_x=0.0, double box_pad_y=0.0) { derived().set_random_positions_impl(box_pad_x, box_pad_y); }
+
     // Compute pairwise forces
     void compute_forces()    { derived().compute_forces_impl(); }
 
@@ -373,6 +376,7 @@ protected:
     void allocate_vertices_impl(int) {}
     void bind_system_globals_impl() {}
     int n_vertices_impl() const { return 0; }
+    void set_random_positions_impl(double, double) {}
 private:
     int _n_cells;
 };

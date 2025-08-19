@@ -32,7 +32,8 @@ public:
     df::DeviceField1D<double>       angular_vel;    // (N,) - angular velocity of the particle
     df::DeviceField1D<double>       moment_inertia; // (N,) - moment of inertia of the particle
 
-    void compute_particle_forces();
+    // Sum up the forces on the particles
+    void compute_particle_forces();  // TODO: could raise this to BasePolyParticle????
 
     // Compute the pairwise forces on the particles
     void compute_forces_impl();  // TODO: could raise this to BasePolyParticle - or at least separate into vertex-level and particle-level
@@ -76,6 +77,8 @@ public:
     // Compute the kinetic energy of each particle
     void compute_ke_impl();
 
+    // Set random positions within the box with padding defaulting to 0.0 inherited from BaseParticle
+    void set_random_positions_impl(double box_pad_x, double box_pad_y);
 };
 
 }

@@ -362,4 +362,8 @@ void Disk::compute_ke_impl() {
     );
 }
 
+void Disk::set_random_positions_impl(double box_pad_x, double box_pad_y) {
+    throw std::runtime_error("Disk::set_random_positions_impl: not implemented");
+}
+
 } // namespace md::disk
