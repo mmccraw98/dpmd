@@ -185,16 +185,14 @@ __global__ void set_random_positions_in_box_kernel(
     double pos_yi = pos_y[i];
     double angle_i = angle[i];
     
+    // Generate new random position and angle for the particle
     double new_pos_xi = curand_uniform_double(&st) * (box_size_x - 2 * box_pad_x) + box_pad_x;
     double new_pos_yi = curand_uniform_double(&st) * (box_size_y - 2 * box_pad_y) + box_pad_y;
     double angle_period_inv = (n_vertices_per_particle > 1) ? 1.0 / n_vertices_per_particle : 0.0;
     double new_angle_i = curand_uniform_double(&st) * 2 * M_PI * angle_period_inv;
 
-    double delta_x = new_pos_xi - pos_xi;
-    double delta_y = new_pos_yi - pos_yi;
-    double dtheta = new_angle_i - angle_i;
-
-    double s, c; sincos(dtheta, &s, &c);
+    // Displace and rotate all vertices
+    double s, c; sincos(new_angle_i - angle_i, &s, &c);
     for (int j = 0; j < n_vertices_per_particle; ++j) {
         double dx = vertex_pos_x[particle_offset + j] - pos_xi;
         double dy = vertex_pos_y[particle_offset + j] - pos_yi;
@@ -300,11 +298,7 @@ void RigidBumpy::enable_poly_swap_extras_impl(bool enable) {
 
 
 void RigidBumpy::set_random_positions_impl(double box_pad_x, double box_pad_y) {
-    // if (!this->pos.rng_enabled()) { this->pos.enable_rng(); }  // enable RNG if not already enabled
-    // if (!this->pos.rng_enabled()) {
-    //     std::cout << "RigidBumpy::set_random_positions_impl: RNG not enabled\n";
-    //     this->pos.enable_rng();
-    // }
+    if (!this->pos.rng_enabled()) { this->pos.enable_rng(); }  // enable RNG if not already enabled
     const int N = n_particles();
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);

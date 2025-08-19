@@ -54,11 +54,5 @@ __global__ void fill_naive_vertex_neighbor_list_kernel(
     }
 }
 
-__global__ void dbg(const int* a, int n) {
-    if (threadIdx.x==0 && blockIdx.x==0) {
-        printf("start[0]=%d start[1]=%d start[n]=%d\n", a[0], a[1], a[n]);
-    }
-}
-
 }
 

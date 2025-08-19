@@ -67,8 +67,10 @@ int main() {
     P.sync_class_constants();
 
     P.init_neighbors();
-
-    P.set_random_positions();
-    P.compute_forces();
-    P.compute_particle_forces();
+    
+    for (int i = 0; i < 1000; ++i) {
+        P.set_random_positions();
+        P.compute_forces();
+        P.compute_particle_forces();
+    }
 }

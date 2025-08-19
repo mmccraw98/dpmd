@@ -10,7 +10,7 @@
 #include <thrust/sequence.h>
 
 #include "utils/cuda_debug.hpp"
-#include "utils/device_fields.hpp"
+#include "utils/device_fields.cuh"
 
 // -----------------------------
 // Helpers

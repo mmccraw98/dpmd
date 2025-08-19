@@ -1,5 +1,5 @@
 #pragma once
-#include "utils/device_fields.hpp"
+#include "utils/device_fields.cuh"
 #include "kernels/common.cuh"
 #include "kernels/launch_config.cuh"
 #include <thrust/device_vector.h>
