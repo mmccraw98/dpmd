@@ -7,31 +7,24 @@
 // TODO: implement tests (mainly for disk) with non-uniform values of radii and mass
 // TODO: add more tests to base particle (ke and pe sums, n_vertices, n_particles, n_systems, etc) and base point particle
 
+// TODO: refactor the global namespace from geo to something more descriptive
+
 // TODO: profile standard vs bucket cell building in the point particles
+// TODO: implement various cell list schemes for rigid particles (vertex level vs particle level)
+// TODO: add a rigid particle with core
 // TODO: profile kernel size
 // TODO: profile speed vs system size and number of particles - how to speed up?  - what is ideal dimension?
 
 // TODO: build system-concatenated data from separate data inputs
 
+// TODO: atomic restart
+
 // Later:
 // TODO: implement a morton or hilbert based cell list stencil
+// TODO: raise certain common methods to higher-level classes (some components of the neighbor list)
 // TODO: overhaul job manager
 //      - non-blocking job db - cannot crash if mulitple accesses occur
 //      - break jobs into blocks (initialization, program run, post process)
 //      - if a block fails, resume it
 
-<!-- 
-# Minimal test that closely matches direct nvcc compilation
-add_executable(test_simple tests/test.cu)
-target_compile_definitions(test_simple PRIVATE
-  THRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA
-  THRUST_HOST_SYSTEM=THRUST_HOST_SYSTEM_CPP
-)
-
-# Test if just linking md_core causes the issue
-add_executable(test_minimal_md tests/test.cu)
-target_link_libraries(test_minimal_md PRIVATE md_core)
-target_compile_definitions(test_minimal_md PRIVATE
-  THRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA
-  THRUST_HOST_SYSTEM=THRUST_HOST_SYSTEM_CPP
-) -->
+// TODO: implement all prior scripts

@@ -243,11 +243,6 @@ void Disk::compute_forces_impl() {
         this->force.xptr(), this->force.yptr(),
         this->pe.ptr()
     );
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        printf("ERROR in compute_forces_impl: %s\n", cudaGetErrorString(err));
-        fflush(stdout);
-    }
 }
 
 void Disk::compute_wall_forces_impl() {

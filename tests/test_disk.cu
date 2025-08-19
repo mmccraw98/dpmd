@@ -162,8 +162,6 @@ int main() {
                     assert(r > 2.0 * rad);
                 }
                 if (r < 2.0 * rad) {
-                    std::cout << (std::abs(host_force_x[i]) + std::abs(host_force_y[i]) > 0.0) << std::endl;
-                    std::cout << i << " " << neighbor_id << " " << N << std::endl;
                     assert((std::abs(host_force_x[i]) + std::abs(host_force_y[i])) > 0.0);
                     assert((std::abs(host_force_x[neighbor_id]) + std::abs(host_force_y[neighbor_id])) > 0.0);
                     assert(host_pe[i] > 0.0);

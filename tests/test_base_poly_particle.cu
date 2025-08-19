@@ -112,6 +112,7 @@ int main() {
         P.sync_class_constants();
 
         P.init_neighbors();
+        assert(P.neighbor_ids.size() == expected_total_vertex_neighbors);
 
         P.neighbor_ids.to_host(host_neighbor_ids);
         P.neighbor_start.to_host(host_neighbor_start);

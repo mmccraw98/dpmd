@@ -52,6 +52,7 @@ set(CORE_KERNEL_SOURCES
 
 set(CORE_PARTICLE_SOURCES
     src/particles/disk.cu
+    src/particles/rigid_bumpy.cu
 )
 
 # Create core library
@@ -66,7 +67,7 @@ set_target_properties(dpmd_core PROPERTIES
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
 )
 
-# Test executables - handle the reserved "test" name
+# Test executables
 set(TEST_SOURCES
     tests/test_base_particle.cu
     tests/test_base_point_particle.cu
@@ -75,6 +76,7 @@ set(TEST_SOURCES
     tests/test_disk.cu
     tests/test_disk_system_naive_parallelism.cu
     tests/test_disk_system_cell_parallelism.cu
+    tests/rigid_bumpy_box_sample.cu
 )
 
 # Create test executables
