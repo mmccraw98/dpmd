@@ -28,12 +28,12 @@ __global__ void compute_pair_forces_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= Nv) return;
 
-    const int sid = md::poly::g_vertex_sys.id[i];
-    const double e_i = g_rigid_bumpy.e_interaction[sid];
-    const double box_size_x = md::geo::g_box.size_x[sid];
-    const double box_size_y = md::geo::g_box.size_y[sid];
-    const double box_inv_x = md::geo::g_box.inv_x[sid];
-    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const int v_sid = md::poly::g_vertex_sys.id[i];
+    const double e_i = g_rigid_bumpy.e_interaction[v_sid];
+    const double box_size_x = md::geo::g_box.size_x[v_sid];
+    const double box_size_y = md::geo::g_box.size_y[v_sid];
+    const double box_inv_x = md::geo::g_box.inv_x[v_sid];
+    const double box_inv_y = md::geo::g_box.inv_y[v_sid];
 
     const double xi = x[i], yi = y[i];
     const double ri = g_rigid_bumpy.vertex_rad[i];
@@ -89,10 +89,10 @@ __global__ void compute_wall_forces_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= Nv) return;
 
-    const int sid = md::geo::g_sys.id[i];
-    const double e_i = g_rigid_bumpy.e_interaction[sid];
-    const double box_size_x = md::geo::g_box.size_x[sid];
-    const double box_size_y = md::geo::g_box.size_y[sid];
+    const int v_sid = md::poly::g_vertex_sys.id[i];
+    const double e_i = g_rigid_bumpy.e_interaction[v_sid];
+    const double box_size_x = md::geo::g_box.size_x[v_sid];
+    const double box_size_y = md::geo::g_box.size_y[v_sid];
 
     const double xi = x[i], yi = y[i];
     const double ri = g_rigid_bumpy.vertex_rad[i];

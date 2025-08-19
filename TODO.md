@@ -1,4 +1,4 @@
-// TODO: finish box sampling protocol
+// TODO: there seems to be an illegal memory access in the RigidBumpy::compute_wall_forces_kernel
 // TODO: add size verification function - check that all n_particle length arrays are the same length and whatnot
 // TODO: add more tests for poly particle - vertex PE sum should match particle PE
 // TODO: elevate certain functions for rigid bumpy to poly particle - maybe make an intermediary - rigid poly?
