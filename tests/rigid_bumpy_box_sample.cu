@@ -40,6 +40,7 @@ int main(int argc, char** argv) {
     std::string out_path = argv[2];
     const double box_length = std::stod(argv[3]);
     const int n_samples = std::stoi(argv[4]);
+    const int rng_seed = std::stoi(argv[5]);
     const double energy_scale = 1.0;
 
     hid_t in_file = H5Fopen(in_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -98,6 +99,7 @@ int main(int argc, char** argv) {
     P.force.fill(0.0, 0.0);
     P.pe.fill(0.0);
     P.vertex_rad.from_host(vertex_rad);
+    P.pos.enable_rng(rng_seed);
 
     P.sync_box();
     P.sync_system();

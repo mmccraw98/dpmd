@@ -1,12 +1,20 @@
-// TODO: there seems to be an illegal memory access in the RigidBumpy::compute_wall_forces_kernel
+// TODO: merge cuda_debug and launch_config, rename, store in utils
+// TODO: rename common.cuh and common_globals.cu, confusing - maybe base_particle_kernels would be better and more in line with remaining files
+// TODO: add particle init function (performs tested series of steps to set up all data)
+// TODO: add a particle validate function (checks everything is synced, sizes match expectation, etc,)
+// TODO: mirror particle classes in python as data classes
+// TODO: refactor constant and namespace naming for better clarity
+// TODO: refactor function naming for better clarity
 // TODO: add size verification function - check that all n_particle length arrays are the same length and whatnot
 // TODO: add more tests for poly particle - vertex PE sum should match particle PE
 // TODO: elevate certain functions for rigid bumpy to poly particle - maybe make an intermediary - rigid poly?
 // TODO: add box resizing - needs to sync with cell sizes and resize particle positions
-// TODO: add fast data output
+// TODO: add fast data output system, works in parallel to main routine
 // TODO: design a system for getting arbitrary data and running arbitrary functions from particle object
 // TODO: implement tests (mainly for disk) with non-uniform values of radii and mass
 // TODO: add more tests to base particle (ke and pe sums, n_vertices, n_particles, n_systems, etc) and base point particle
+
+// TODO: add sample within polygon - (requires polygon vertices, offsets, particle id) - launch kernel over polygon particle id size, only sample particles with a polygon
 
 // TODO: refactor the global namespace from geo to something more descriptive
 
