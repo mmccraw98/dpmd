@@ -37,10 +37,8 @@ void damped_md_step(
     P.update_velocities(dt, 0.5);
     P.scale_velocities(velocity_scale);
     P.update_positions(dt, 1.0);
-    P.compute_forces();
     P.compute_wall_forces();
     P.compute_damping_forces(damping_coefficient);
-    P.compute_particle_forces();
     P.update_velocities(dt, 0.5);
     P.scale_velocities(velocity_scale);
 }
@@ -64,10 +62,8 @@ void minimize_damped_md(
     P.scale_velocities(velocity_scale);
     velocity_scale.fill(1.0);
 
-    P.compute_forces();
     P.compute_wall_forces();
     P.compute_damping_forces(damping_coefficient);
-    P.compute_particle_forces();
 
     int step = 0;
     while (step < n_steps) {

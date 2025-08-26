@@ -147,9 +147,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < n_samples; ++i) {
         // generate random positions and calculate forces, sum to particle level
         P.set_random_positions(box_pad, box_pad);
-        P.compute_forces();
         P.compute_wall_forces();
-        P.compute_particle_forces();
 
         // transfer data to host
         P.pos.to_host(h_pos_x, h_pos_y);

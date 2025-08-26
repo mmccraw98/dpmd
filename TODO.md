@@ -1,4 +1,8 @@
-// TODO: change force calculation function to be pair_forces (uses PBC) and pair_forces_with_wall (does not use PBC), remove the PBC compiler flag
+// TODO: make a basic integrator
+// TODO: test the wall forces
+// TODO: test the jamming code using disks
+// TODO: add tests for wall forces for disks
+// TODO: add tests for rigid bumpy dynamics
 // TODO: implement cell list for rigid bumpy particles
 // TODO: add integrators - can be basically identical to dpcuda2
 // TODO: remove vertex mass from rigid bumpy

@@ -112,9 +112,7 @@ void fire_step(
     P.scale_velocities(velocity_scale);  // does nothing unless velocity_scale[i] != 1.0
     P.update_positions(dt, 0.5);
 
-    P.compute_forces();
     P.compute_wall_forces();
-    P.compute_particle_forces();
     
     P.update_velocities(dt, 0.5);
 }
@@ -150,9 +148,7 @@ void minimize_fire(
     P.scale_velocities(velocity_scale);
     velocity_scale.fill(1.0);
 
-    P.compute_forces();
     P.compute_wall_forces();
-    P.compute_particle_forces();
 
     int step = 0;
     while (step < n_steps) {

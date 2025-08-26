@@ -186,10 +186,10 @@ public:
     // Set random positions within the box with padding defaulting to 0.0
     void set_random_positions(double box_pad_x=0.0, double box_pad_y=0.0) { derived().set_random_positions_impl(box_pad_x, box_pad_y); }
 
-    // Compute pairwise forces
+    // Compute pairwise forces (zeros out force and potential energy initially)
     void compute_forces()    { derived().compute_forces_impl(); }
 
-    // Compute wall forces
+    // Compute pairwise forces and wall forces (zeros out force and potential energy initially)
     void compute_wall_forces() { derived().compute_wall_forces_impl(); }
 
     // Compute damping forces - system-level damping scale

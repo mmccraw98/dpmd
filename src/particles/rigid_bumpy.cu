@@ -111,12 +111,10 @@ __global__ void compute_pair_forces_kernel(
 
     const int v_sid = md::poly::g_vertex_sys.id[i];
     const double e_i = g_rigid_bumpy.e_interaction[v_sid];
-    #ifdef ENABLE_PBC_DIST
-        const double box_size_x = md::geo::g_box.size_x[v_sid];
-        const double box_size_y = md::geo::g_box.size_y[v_sid];
-        const double box_inv_x = md::geo::g_box.inv_x[v_sid];
-        const double box_inv_y = md::geo::g_box.inv_y[v_sid];
-    #endif
+    const double box_size_x = md::geo::g_box.size_x[v_sid];
+    const double box_size_y = md::geo::g_box.size_y[v_sid];
+    const double box_inv_x = md::geo::g_box.inv_x[v_sid];
+    const double box_inv_y = md::geo::g_box.inv_y[v_sid];
 
     const double xi = x[i], yi = y[i];
     const double ri = g_rigid_bumpy.vertex_rad[i];
@@ -131,14 +129,7 @@ __global__ void compute_pair_forces_kernel(
         const double rj = g_rigid_bumpy.vertex_rad[j];
 
         double dx, dy;
-
-        #ifdef ENABLE_PBC_DIST
-            double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
-        #else
-            dx = xj - xi;
-            dy = yj - yi;
-            double r2 = dx * dx + dy * dy;
-        #endif
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
 
         // Early reject if no overlap: r^2 >= (ri+rj)^2
         const double radsum = ri + rj;
@@ -167,7 +158,7 @@ __global__ void compute_pair_forces_kernel(
     pe[i] = pei;
 }
 
-// Compute the wall forces on the particles (MUST FOLLOW AFTER compute_pair_forces_kernel OR AN EQUIVALENT FORCE-ZEROING OPERATION!)
+// Compute the forces on the particles due to the walls and the interactions with their neighbors
 __global__ void compute_wall_forces_kernel(
     const double* __restrict__ x,
     const double* __restrict__ y,
@@ -214,9 +205,43 @@ __global__ void compute_wall_forces_kernel(
         pei += (0.5 * e_i * delta * delta) * 0.5;
     }
 
-    fx[i] += fxi;
-    fy[i] += fyi;
-    pe[i] += pei;
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const double xj = x[j], yj = y[j];
+        const double rj = g_rigid_bumpy.vertex_rad[j];
+
+        double dx = xj - xi;
+        double dy = yj - yi;
+        double r2 = dx * dx + dy * dy;
+
+        // Early reject if no overlap: r^2 >= (ri+rj)^2
+        const double radsum = ri + rj;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+
+        // Overlap: compute r and invr once
+        const double r   = sqrt(r2);
+        const double inv = 1.0 / r;
+        const double nx  = dx * inv;
+        const double ny  = dy * inv;
+
+        const double delta = radsum - r;
+        const double fmag  = e_i * delta;
+
+        // Force on i is along -n (repulsion)
+        fxi -= fmag * nx;
+        fyi -= fmag * ny;
+
+        // Single-count the pair energy (each pair gets half)
+        pei += (0.5 * e_i * delta * delta) * 0.5;
+    }
+    
+    fx[i] = fxi;
+    fy[i] = fyi;
+    pe[i] = pei;
 }
 
 // Compute the damping forces on the particles
@@ -465,6 +490,9 @@ void RigidBumpy::compute_forces_impl() {
         this->vertex_force.xptr(), this->vertex_force.yptr(),
         this->vertex_pe.ptr()
     );
+
+    // sum up the vertex forces and potential energies to the particle level
+    this->compute_particle_forces();
 }
 
 void RigidBumpy::compute_wall_forces_impl() {
@@ -476,6 +504,9 @@ void RigidBumpy::compute_wall_forces_impl() {
         this->vertex_force.xptr(), this->vertex_force.yptr(),
         this->vertex_pe.ptr()
     );
+
+    // sum up the vertex forces and potential energies to the particle level
+    this->compute_particle_forces();
 }
 
 void RigidBumpy::compute_damping_forces_impl(df::DeviceField1D<double> scale) {

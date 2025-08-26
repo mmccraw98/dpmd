@@ -306,7 +306,7 @@ int main() {
                 P.update_velocities(dt, 0.5);
                 P.update_positions(dt, 1.0);
                 P.check_neighbors();
-                P.compute_forces();
+                P.compute_wall_forces();
                 P.compute_damping_forces(damping);
                 P.update_velocities(dt, 0.5);
             }
@@ -469,6 +469,159 @@ int main() {
         std::cout << "p: " << p << std::endl;
         assert(std::abs(p - 2.0) < 0.1);
         std::cout << "Cell neighbor energy conservation test passed" << std::endl;
+    }
+
+
+    {  // Test Naive neighbor method with wall forces
+        std::cout << "Testing Naive neighbor energy conservation with wall forces" << std::endl;
+        md::disk::Disk P;
+        P.set_neighbor_method(md::NeighborMethod::Naive); // set this before allocating particles
+
+        P.allocate_systems(S);
+        P.allocate_particles(N);
+
+        P.verlet_skin.from_host(host_skin);
+        P.thresh2.from_host(host_thresh2);
+        P.system_id.from_host(host_system_id);
+        P.system_size.from_host(host_system_size);
+        P.system_offset.from_host(host_system_start);
+        P.cell_dim.from_host(host_cell_size_dim, host_cell_size_dim);
+        P.cell_system_start.from_host(host_cell_system_start);
+        P.box_size.from_host(host_box_size, host_box_size);
+        P.e_interaction.from_host(host_e_interaction);
+        P.rad.from_host(host_rad);
+        P.mass.from_host(host_mass);
+        P.rad.from_host(host_rad);
+        P.pos.from_host(equil_pos_x, equil_pos_y);
+        P.vel.from_host(init_vel_x, init_vel_y);
+
+        P.sync_box();
+        P.sync_system();
+        P.sync_neighbors();
+        P.sync_cells();
+        P.sync_class_constants();
+        P.init_neighbors();
+
+        std::vector<double> dts_to_test = {1e-1, 1e-2, 1e-3};
+        std::vector<int> n_steps_to_test = {1000, 10000, 100000};
+        std::vector<double> energy_fluctuations(dts_to_test.size());
+        std::vector<double> relstd; relstd.reserve(dts_to_test.size());
+        for (int i = 0; i < static_cast<int>(dts_to_test.size()); i++) {
+            P.vel.from_host(init_vel_x, init_vel_y);
+            P.pos.from_host(equil_pos_x, equil_pos_y);
+            P.compute_wall_forces();
+
+            int n_steps = n_steps_to_test[i];
+            double dt_test = dts_to_test[i];
+
+            std::vector<double> ke_total(S);
+            std::vector<double> pe_total(S);
+            std::vector<double> te_hist(n_steps, 0.0);
+            RelStd rs;
+
+            dt.fill(dt_test);
+
+            for (int step = 0; step < n_steps; step++) {
+                P.update_velocities(dt, 0.5);
+                P.update_positions(dt, 1.0);
+                P.check_neighbors();
+                P.compute_wall_forces();
+                P.update_velocities(dt, 0.5);
+
+                // log the total energy of each system
+                P.compute_ke_total();
+                P.compute_pe_total();
+                P.pe_total.to_host(pe_total);
+                P.ke_total.to_host(ke_total);
+                for (int s = 0; s < S; s++) {
+                    te_hist[step] += pe_total[s] + ke_total[s];
+                }
+                rs.push(te_hist[step]);
+            }
+            double r = rs.rel();
+            relstd.push_back(r);
+            std::cout << "dt: " << dt_test << " energy fluctuations: " << r << std::endl;
+        }
+        double p = fit_loglog_slope_filtered(dts_to_test, relstd);
+        std::cout << "p: " << p << std::endl;
+        assert(std::abs(p - 2.0) < 0.1);
+        std::cout << "Naive neighbor energy conservation with wall forces test passed" << std::endl;
+    }
+
+    {  // Test Cell neighbor method with wall forces
+        std::cout << "Testing Cell neighbor energy conservation with wall forces" << std::endl;
+        md::disk::Disk P;
+        P.set_neighbor_method(md::NeighborMethod::Cell); // set this before allocating particles
+
+        P.allocate_systems(S);
+        P.allocate_particles(N);
+
+        P.verlet_skin.from_host(host_skin);
+        P.thresh2.from_host(host_thresh2);
+        P.system_id.from_host(host_system_id);
+        P.system_size.from_host(host_system_size);
+        P.system_offset.from_host(host_system_start);
+        P.cell_dim.from_host(host_cell_size_dim, host_cell_size_dim);
+        P.cell_system_start.from_host(host_cell_system_start);
+        P.box_size.from_host(host_box_size, host_box_size);
+        P.e_interaction.from_host(host_e_interaction);
+        P.rad.from_host(host_rad);
+        P.mass.from_host(host_mass);
+        P.rad.from_host(host_rad);
+        P.pos.from_host(equil_pos_x, equil_pos_y);
+        P.vel.from_host(init_vel_x, init_vel_y);
+
+        P.sync_box();
+        P.sync_system();
+        P.sync_neighbors();
+        P.sync_cells();
+        P.sync_class_constants();
+        P.init_neighbors();
+
+        std::vector<double> dts_to_test = {1e-1, 1e-2, 1e-3};
+        std::vector<int> n_steps_to_test = {1000, 10000, 100000};
+        std::vector<double> energy_fluctuations(dts_to_test.size());
+        std::vector<double> relstd; relstd.reserve(dts_to_test.size());
+        for (int i = 0; i < static_cast<int>(dts_to_test.size()); i++) {
+            P.vel.from_host(init_vel_x, init_vel_y);
+            P.pos.from_host(equil_pos_x, equil_pos_y);
+            P.compute_wall_forces();
+
+            int n_steps = n_steps_to_test[i];
+            double dt_test = dts_to_test[i];
+
+            std::vector<double> ke_total(S);
+            std::vector<double> pe_total(S);
+            std::vector<double> te_hist(n_steps, 0.0);
+            RelStd rs;
+
+            dt.fill(dt_test);
+
+            for (int step = 0; step < n_steps; step++) {
+                P.update_velocities(dt, 0.5);
+                P.update_positions(dt, 1.0);
+                P.check_neighbors();
+                P.compute_wall_forces();
+                P.update_velocities(dt, 0.5);
+
+                // log the total energy of each system
+                P.compute_ke_total();
+                P.compute_pe_total();
+                P.pe_total.to_host(pe_total);
+                P.ke_total.to_host(ke_total);
+                for (int s = 0; s < S; s++) {
+                    te_hist[step] += pe_total[s] + ke_total[s];
+                }
+                rs.push(te_hist[step]);
+            }
+            double r = rs.rel();
+            relstd.push_back(r);
+            std::cout << "dt: " << dt_test << " energy fluctuations: " << r << std::endl;
+        }
+        double p = fit_loglog_slope_filtered(dts_to_test, relstd);
+        std::cout << "p: " << p << std::endl;
+        assert(std::abs(p - 2.0) < 0.1);
+        std::cout << "Cell neighbor energy conservation with wall forces test passed" << std::endl;
     }
     
 }

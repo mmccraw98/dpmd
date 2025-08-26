@@ -1,8 +1,8 @@
 # rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_CUDA_DEBUG=ON .. && make -j8
-# rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA_DEBUG=OFF .. && make -j8
-# -DCMAKE_BUILD_TYPE= [Debug, Release]
-# -DENABLE_CUDA_DEBUG= [ON, OFF]
-# -DENABLE_PBC_DIST= [ON, OFF]
+# rm -rf build && mkdir build && cd build && cmake OPTIONS .. && make -j8
+# OPTIONS:
+# -DCMAKE_BUILD_TYPE=Debug, Release
+# -DENABLE_CUDA_DEBUG=ON, OFF
 
 cmake_minimum_required(VERSION 3.18)
 
