@@ -6,7 +6,7 @@
 #include <cuda_runtime.h>
 
 #include "particles/base_point_particle.hpp"
-#include "kernels/common.cuh"
+#include "kernels/base_particle_kernels.cuh"
 
 namespace md {
 

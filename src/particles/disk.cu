@@ -1,5 +1,5 @@
 #include "particles/disk.cuh"
-#include "kernels/common.cuh"
+#include "kernels/base_particle_kernels.cuh"
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>

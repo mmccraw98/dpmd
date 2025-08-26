@@ -52,7 +52,7 @@ endif()
 
 # Core library sources
 set(CORE_KERNEL_SOURCES
-    src/kernels/common_globals.cu
+    src/kernels/base_particle_kernels.cu
     src/kernels/base_point_particle_kernels.cu
     src/kernels/base_poly_particle_kernels.cu
 )

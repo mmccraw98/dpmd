@@ -1,5 +1,5 @@
 #include <cuda_runtime.h>
-#include "kernels/common.cuh"
+#include "kernels/base_particle_kernels.cuh"
 #include "utils/cuda_debug.hpp"
 
 namespace md { namespace geo {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kernels/common.cuh"
+#include "kernels/base_particle_kernels.cuh"
 
 namespace md::point {
 

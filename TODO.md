@@ -1,7 +1,5 @@
-// TODO: make a basic integrator
-// TODO: rename common.cuh and common_globals.cu, confusing - maybe base_particle_kernels would be better and more in line with remaining files
 // TODO: merge cuda_debug and launch_config, rename, store in utils
-// TODO: test the wall forces
+// TODO: test the wall forces and energy conservation
 // TODO: test the jamming code using disks
 // TODO: add tests for wall forces for disks
 // TODO: add tests for rigid bumpy dynamics

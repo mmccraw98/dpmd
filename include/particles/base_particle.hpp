@@ -1,6 +1,6 @@
 #pragma once
 #include "utils/device_fields.cuh"
-#include "kernels/common.cuh"
+#include "kernels/base_particle_kernels.cuh"
 #include "kernels/launch_config.cuh"
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
