@@ -90,6 +90,8 @@ set(TEST_SOURCES
     tests/rigid_bumpy_box_sample.cu
     tests/jam_rigid_bumpy.cu
     tests/damped_jam_rigid_bumpy.cu
+    tests/nve_disk_pbc.cu
+    tests/nve_disk_wall.cu
 )
 
 # Create test executables

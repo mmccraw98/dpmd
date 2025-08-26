@@ -97,4 +97,18 @@ __global__ void init_cell_sizes_kernel(
     ncell_out[s] = nx * ny;
 }
 
+// Kernel to compute the fractional packing fraction for each particle in the system
+__global__ void compute_fractional_packing_fraction_kernel(
+    const double* __restrict__ area,
+    double* __restrict__ packing_fraction_per_particle
+) {
+    const int N = g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    
+    const int sid = g_sys.id[i];
+    const double box_area = g_box.size_x[sid] * g_box.size_y[sid];
+    packing_fraction_per_particle[i] = area[i] / box_area;
+}
+
 }} // namespace md::geo

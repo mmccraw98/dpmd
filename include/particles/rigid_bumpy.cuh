@@ -91,8 +91,6 @@ public:
 
     // Compute the total power for each system
     void compute_fpower_total_impl();
-
-    void compute_packing_fraction();
 };
 
 }

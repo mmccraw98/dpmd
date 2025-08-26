@@ -396,6 +396,53 @@ public:
         return area_total;
     }
 
+    void compute_packing_fraction() {
+        const int N = n_particles();
+        const int S = n_systems();
+        
+        // Create temporary array for per-particle packing fractions
+        static df::DeviceField1D<double> pf_per_particle;
+        if (pf_per_particle.size() != N) {
+            pf_per_particle.resize(N);
+        }
+        
+        // Compute per-particle packing fractions
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(N);
+        CUDA_LAUNCH(md::geo::compute_fractional_packing_fraction_kernel, G, B,
+            this->area.ptr(), pf_per_particle.ptr()
+        );
+        
+        // Sum per system using CUB
+        cudaStream_t stream = 0;
+        void* d_temp = this->cub_sys_agg.ptr();
+        size_t temp_bytes = this->cub_sys_agg.size();
+        
+        // 1) size request
+        cub::DeviceSegmentedReduce::Sum(
+            nullptr, temp_bytes,
+            pf_per_particle.ptr(), this->packing_fraction.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+
+        // 2) ensure workspace
+        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
+            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+            d_temp = this->cub_sys_agg.ptr();
+        }
+
+        // 3) run
+        cub::DeviceSegmentedReduce::Sum(
+            d_temp, temp_bytes,
+            pf_per_particle.ptr(), this->packing_fraction.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+    }
+
     void compute_fpower_total() { derived().compute_fpower_total_impl(); }
 
 

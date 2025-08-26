@@ -180,29 +180,30 @@ __global__ void compute_wall_forces_kernel(
     
     double fxi = 0.0, fyi = 0.0, pei = 0.0;
 
+    // compute the wall forces - do not divide pe by 2 here since it is only given to one particle
     if (xi < ri) {
         const double delta = ri - xi;
         const double fmag = e_i * delta;
         fxi += fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
     if (xi > box_size_x - ri) {
         const double delta = ri - (box_size_x - xi);
         const double fmag = e_i * delta;
         fxi -= fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
     if (yi < ri) {
         const double delta = ri - yi;
         const double fmag = e_i * delta;
         fyi += fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
     if (yi > box_size_y - ri) {
         const double delta = ri - (box_size_y - yi);
         const double fmag = e_i * delta;
         fyi -= fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
 
     const int beg = md::geo::g_neigh.start[i];
@@ -390,20 +391,6 @@ struct PowerFunctor {
         return fx * vx + fy * vy + torque * ang_vel;
     }
 };
-
-// Kernel to compute the fractional packing fraction for each particle in the system
-__global__ void compute_fractional_packing_fraction_kernel(
-    const double* __restrict__ area,
-    double* __restrict__ packing_fraction_per_particle
-) {
-    const int N = md::geo::g_sys.n_particles;
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= N) return;
-    
-    const int sid = md::geo::g_sys.id[i];
-    const double box_area = md::geo::g_box.size_x[sid] * md::geo::g_box.size_y[sid];
-    packing_fraction_per_particle[i] = area[i] / box_area;
-}
 
 // Scale the velocities of the particles
 __global__ void scale_velocities_kernel(
@@ -657,53 +644,6 @@ void RigidBumpy::compute_fpower_total_impl() {
     cub::DeviceSegmentedReduce::Sum(
         d_temp, temp_bytes,
         input_iter, this->fpower_total.ptr(),
-        S,
-        this->system_offset.ptr(),
-        this->system_offset.ptr() + 1,
-        stream);
-}
-
-void RigidBumpy::compute_packing_fraction() {
-    const int N = n_particles();
-    const int S = n_systems();
-    
-    // Create temporary array for per-particle packing fractions
-    static df::DeviceField1D<double> pf_per_particle;
-    if (pf_per_particle.size() != N) {
-        pf_per_particle.resize(N);
-    }
-    
-    // Compute per-particle packing fractions
-    auto B = md::launch::threads_for();
-    auto G = md::launch::blocks_for(N);
-    CUDA_LAUNCH(kernels::compute_fractional_packing_fraction_kernel, G, B,
-        this->area.ptr(), pf_per_particle.ptr()
-    );
-    
-    // Sum per system using CUB
-    cudaStream_t stream = 0;
-    void* d_temp = this->cub_sys_agg.ptr();
-    size_t temp_bytes = this->cub_sys_agg.size();
-    
-    // 1) size request
-    cub::DeviceSegmentedReduce::Sum(
-        nullptr, temp_bytes,
-        pf_per_particle.ptr(), this->packing_fraction.ptr(),
-        S,
-        this->system_offset.ptr(),
-        this->system_offset.ptr() + 1,
-        stream);
-
-    // 2) ensure workspace
-    if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
-        this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
-        d_temp = this->cub_sys_agg.ptr();
-    }
-
-    // 3) run
-    cub::DeviceSegmentedReduce::Sum(
-        d_temp, temp_bytes,
-        pf_per_particle.ptr(), this->packing_fraction.ptr(),
         S,
         this->system_offset.ptr(),
         this->system_offset.ptr() + 1,

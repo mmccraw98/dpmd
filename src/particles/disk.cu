@@ -182,30 +182,30 @@ __global__ void compute_wall_forces_kernel(
     
     double fxi = 0.0, fyi = 0.0, pei = 0.0;
 
-    // compute wall forces
+    // compute wall forces - do not divide pe by 2 here since it is only given to one particle
     if (xi < ri) {
         const double delta = ri - xi;
         const double fmag = e_i * delta;
         fxi += fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
     if (xi > box_size_x - ri) {
         const double delta = ri - (box_size_x - xi);
         const double fmag = e_i * delta;
         fxi -= fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
     if (yi < ri) {
         const double delta = ri - yi;
         const double fmag = e_i * delta;
         fyi += fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
     if (yi > box_size_y - ri) {
         const double delta = ri - (box_size_y - yi);
         const double fmag = e_i * delta;
         fyi -= fmag;
-        pei += (0.5 * e_i * delta * delta) * 0.5;
+        pei += (0.5 * e_i * delta * delta);
     }
 
     // compute pair forces

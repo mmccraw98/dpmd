@@ -89,6 +89,11 @@ __global__ void init_cell_sizes_kernel(
     double*       __restrict__ cell_inv_y,
     int*          __restrict__ ncell_out);
 
+__global__ void compute_fractional_packing_fraction_kernel(
+    const double* __restrict__ area,
+    double* __restrict__ packing_fraction_per_particle
+);
+
 // -----------------------------
 // Geometry helpers (ASAP / __forceinline__)
 // -----------------------------
