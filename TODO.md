@@ -1,3 +1,8 @@
+// TODO: change force calculation function to be pair_forces (uses PBC) and pair_forces_with_wall (does not use PBC), remove the PBC compiler flag
+// TODO: implement cell list for rigid bumpy particles
+// TODO: add integrators - can be basically identical to dpcuda2
+// TODO: remove vertex mass from rigid bumpy
+// TODO: test various position, velocity, force update schemes for the rigid bumpy particles
 // TODO: merge cuda_debug and launch_config, rename, store in utils
 // TODO: rename common.cuh and common_globals.cu, confusing - maybe base_particle_kernels would be better and more in line with remaining files
 // TODO: add particle init function (performs tested series of steps to set up all data)
@@ -13,6 +18,8 @@
 // TODO: design a system for getting arbitrary data and running arbitrary functions from particle object
 // TODO: implement tests (mainly for disk) with non-uniform values of radii and mass
 // TODO: add more tests to base particle (ke and pe sums, n_vertices, n_particles, n_systems, etc) and base point particle
+
+// TODO: split out tests and scripts
 
 // TODO: add sample within polygon - (requires polygon vertices, offsets, particle id) - launch kernel over polygon particle id size, only sample particles with a polygon
 

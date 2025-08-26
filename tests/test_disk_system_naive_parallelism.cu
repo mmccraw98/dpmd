@@ -8,7 +8,7 @@ int main(int argc, char** argv) {
     const int n_steps = 1000;
     // determine S from command line if provided, otherwise default to 10
     const int S = (argc > 1) ? atoi(argv[1]) : 10;
-    const double dt = 1e-2;
+    const double dt_scale = 1e-2;
     const int num_particles_per_system = 10;
     const int n_cell_dim = 4;
     const double packing_fraction = 0.5;
@@ -52,6 +52,7 @@ int main(int argc, char** argv) {
         host_rad[i] = rad;
     }
 
+    df::DeviceField1D<double> dt; dt.resize(S); dt.fill(dt_scale);
 
     {  // Test Naive neighbor method
         std::cout << "Testing Naive neighbor method for S = " << S << " and N = " << N << std::endl;
@@ -89,11 +90,11 @@ int main(int argc, char** argv) {
 
 
         for (int i = 0; i < n_steps; i++) {
-            P.update_velocities(dt * 0.5);
-            P.update_positions(dt);
+            P.update_velocities(dt, 0.5);
+            P.update_positions(dt, 1.0);
             P.check_neighbors();
             P.compute_forces();
-            P.update_velocities(dt * 0.5);
+            P.update_velocities(dt, 0.5);
         }
         cudaDeviceSynchronize();
 

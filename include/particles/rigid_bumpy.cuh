@@ -8,13 +8,15 @@ namespace md::rigid_bumpy {
 struct RigidBumpyConst {  // TODO: should add more to this once the class is fully implemented
     const double* e_interaction;
     const double* vertex_rad;
+    const double* mass;
+    const double* moment_inertia;
 };
 
 // Rigid Bumpy-specific device constants
 extern __constant__ RigidBumpyConst g_rigid_bumpy;
 
 // Bind the rigid bumpy constants to the device
-void bind_rigid_bumpy_globals(const double* d_e_interaction, const double* d_vertex_rad);
+void bind_rigid_bumpy_globals(const double* d_e_interaction, const double* d_vertex_rad, const double* d_mass, const double* d_moment_inertia);
 
 // Rigid Bumpy particle class
 class RigidBumpy : public md::BasePolyParticle<md::rigid_bumpy::RigidBumpy> {
@@ -30,6 +32,7 @@ public:
     df::DeviceField1D<double>       angle;          // (N,) - angle of the particle
     df::DeviceField1D<double>       torque;         // (N,) - torque on the particle
     df::DeviceField1D<double>       angular_vel;    // (N,) - angular velocity of the particle
+    df::DeviceField1D<double>       mass;           // (N,) - mass of the particle
     df::DeviceField1D<double>       moment_inertia; // (N,) - moment of inertia of the particle
 
     // Sum up the forces on the particles
@@ -42,13 +45,19 @@ public:
     void compute_wall_forces_impl();  // TODO: could raise this to BasePolyParticle
 
     // Compute the damping forces
-    void compute_damping_forces_impl(double scale);
+    void compute_damping_forces_impl(df::DeviceField1D<double> scale);
 
     // Update the positions of the particles
-    void update_positions_impl(double scale);
+    void update_positions_impl(df::DeviceField1D<double> scale, double scale2);
 
     // Update the velocities of the particles
-    void update_velocities_impl(double scale);
+    void update_velocities_impl(df::DeviceField1D<double> scale, double scale2);
+
+    // Scale the velocities of the particles
+    void scale_velocities_impl(df::DeviceField1D<double> scale);
+
+    // Mix velocities and forces - system-level alpha, primarily used for FIRE
+    void mix_velocities_and_forces_impl(df::DeviceField1D<double> alpha);
 
     // Allocate the poly particle-level extras
     void allocate_poly_extras_impl(int N);
@@ -79,6 +88,11 @@ public:
 
     // Set random positions within the box with padding defaulting to 0.0 inherited from BaseParticle
     void set_random_positions_impl(double box_pad_x, double box_pad_y);
+
+    // Compute the total power for each system
+    void compute_fpower_total_impl();
+
+    void compute_packing_fraction();
 };
 
 }

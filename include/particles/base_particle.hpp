@@ -26,6 +26,7 @@ public:
     df::DeviceField2D<double> force;          // (N,2)
     df::DeviceField1D<double> pe;             // (N,)
     df::DeviceField1D<double> ke;             // (N,)
+    df::DeviceField1D<double> area;           // (N,)
 
     // Neighbor list fields
     df::DeviceField1D<int>    neighbor_count; // (N,) - number of neighbors for each particle
@@ -62,6 +63,7 @@ public:
     df::DeviceField1D<double> temperature;       // (S,) - temperature for each system
     df::DeviceField1D<double> pe_total;          // (S,) - total potential energy for each system
     df::DeviceField1D<double> ke_total;          // (S,) - total kinetic energy for each system
+    df::DeviceField1D<double> fpower_total;      // (S,) - total power for each system (used for the FIRE algorithm)
 
     // Neighbor method
     NeighborMethod neighbor_method = NeighborMethod::Naive;
@@ -125,6 +127,7 @@ public:
     // Allocate particle-level data for total number of particles
     void allocate_particles(int N) {
         pos.resize(N); vel.resize(N); force.resize(N); pe.resize(N); ke.resize(N);
+        area.resize(N);
         derived().allocate_particles_impl(N);
     }
 
@@ -189,14 +192,17 @@ public:
     // Compute wall forces
     void compute_wall_forces() { derived().compute_wall_forces_impl(); }
 
-    // Compute damping forces
-    void compute_damping_forces(double scale) { derived().compute_damping_forces_impl(scale); }
+    // Compute damping forces - system-level damping scale
+    void compute_damping_forces(df::DeviceField1D<double> scale) { derived().compute_damping_forces_impl(scale); }
 
-    // Update positions
-    void update_positions(double scale) { derived().update_positions_impl(scale); }
+    // Update positions - system-level dt with optional global scaling factor (i.e. for half-step)
+    void update_positions(df::DeviceField1D<double> scale, double scale2=1.0) { derived().update_positions_impl(scale, scale2); }
 
-    // Update velocities
-    void update_velocities(double scale) { derived().update_velocities_impl(scale); }
+    // Update velocities - system-level velocity scale with optional global scaling factor (i.e. for half-step)
+    void update_velocities(df::DeviceField1D<double> scale, double scale2=1.0) { derived().update_velocities_impl(scale, scale2); }
+
+    // Mix velocities and forces - system-level alpha, primarily used for FIRE
+    void mix_velocities_and_forces(df::DeviceField1D<double> alpha) { derived().mix_velocities_and_forces_impl(alpha); }
 
     // Initialize naive (all-to-all, N^2) neighbor list
     void init_naive_neighbors() { derived().init_naive_neighbors_impl(); }
@@ -219,6 +225,9 @@ public:
 
     // Reset the displacements of the particles to the current positions
     void reset_displacements() { derived().reset_displacements_impl(); }
+
+    // Scale the velocities of the particles
+    void scale_velocities(df::DeviceField1D<double> scale) { derived().scale_velocities_impl(scale); }
 
     // Compute the kinetic energy of each particle
     void compute_ke() { derived().compute_ke_impl(); }
@@ -350,6 +359,45 @@ public:
             stream);
     }
 
+    // Compute the total particle area of each system
+    df::DeviceField1D<double> compute_particle_area_total() {
+        cudaStream_t stream = 0;
+        const int S = this->n_systems();
+
+        void* d_temp = this->cub_sys_agg.ptr();
+        size_t temp_bytes = this->cub_sys_agg.size();
+
+        df::DeviceField1D<double> area_total(S);
+
+        // 1) size request
+        cub::DeviceSegmentedReduce::Sum(
+            nullptr, temp_bytes,
+            this->area.ptr(), area_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+
+        // 2) ensure workspace
+        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
+            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+            d_temp = this->cub_sys_agg.ptr();
+        }
+
+        // 3) run
+        cub::DeviceSegmentedReduce::Sum(
+            d_temp, temp_bytes,
+            this->area.ptr(), area_total.ptr(),
+            S,
+            this->system_offset.ptr(),
+            this->system_offset.ptr() + 1,
+            stream);
+
+        return area_total;
+    }
+
+    void compute_fpower_total() { derived().compute_fpower_total_impl(); }
+
 
 protected:
     Derived&       derived()       { return static_cast<Derived&>(*this); }
@@ -368,8 +416,10 @@ protected:
     void compute_wall_forces_impl() {}
     void compute_damping_forces_impl(double) {}
     void sync_class_constants_impl() {}
-    void update_positions_impl(double) {}
-    void update_velocities_impl(double) {}
+    void mix_velocities_and_forces_impl(double) {}
+    void scale_velocities_impl(double) {}
+    void update_positions_impl(double, double) {}
+    void update_velocities_impl(double, double) {}
     void reorder_particles_impl() {}
     void reset_displacements_impl() {}
     void compute_ke_impl() {}
@@ -377,6 +427,7 @@ protected:
     void bind_system_globals_impl() {}
     int n_vertices_impl() const { return 0; }
     void set_random_positions_impl(double, double) {}
+    void compute_fpower_total_impl() {}
 private:
     int _n_cells;
 };

@@ -264,6 +264,9 @@ int main() {
 
     // energy conservation check
 
+    df::DeviceField1D<double> dt; dt.resize(S); dt.fill(1e-2);
+    df::DeviceField1D<double> damping; damping.resize(S); damping.fill(1e0);
+
     // first generate some initial conditions
     std::vector<double> equil_pos_x(N), equil_pos_y(N);
     std::vector<double> init_vel_x(N), init_vel_y(N);
@@ -297,17 +300,15 @@ int main() {
         P.sync_class_constants();
         P.init_neighbors();
 
-        double dt = 1e-2;
-
         // quickly equilibrate the system and get initial conditions
         for (int rep = 0; rep < 10; rep++) {
             for (int i = 0; i < 500; i++) {
-                P.update_velocities(dt * 0.5);
-                P.update_positions(dt);
+                P.update_velocities(dt, 0.5);
+                P.update_positions(dt, 1.0);
                 P.check_neighbors();
                 P.compute_forces();
-                P.compute_damping_forces(1e0);
-                P.update_velocities(dt * 0.5);
+                P.compute_damping_forces(damping);
+                P.update_velocities(dt, 0.5);
             }
             P.force.fill(0.0, 0.0);
             P.vel.fill(0.0, 0.0);
@@ -365,12 +366,14 @@ int main() {
             std::vector<double> te_hist(n_steps, 0.0);
             RelStd rs;
 
+            dt.fill(dt_test);
+
             for (int step = 0; step < n_steps; step++) {
-                P.update_velocities(dt_test * 0.5);
-                P.update_positions(dt_test);
+                P.update_velocities(dt, 0.5);
+                P.update_positions(dt, 1.0);
                 P.check_neighbors();
                 P.compute_forces();
-                P.update_velocities(dt_test * 0.5);
+                P.update_velocities(dt, 0.5);
 
                 // log the total energy of each system
                 P.compute_ke_total();
@@ -439,12 +442,14 @@ int main() {
             std::vector<double> te_hist(n_steps, 0.0);
             RelStd rs;
 
+            dt.fill(dt_test);
+
             for (int step = 0; step < n_steps; step++) {
-                P.update_velocities(dt_test * 0.5);
-                P.update_positions(dt_test);
+                P.update_velocities(dt, 0.5);
+                P.update_positions(dt, 1.0);
                 P.check_neighbors();
                 P.compute_forces();
-                P.update_velocities(dt_test * 0.5);
+                P.update_velocities(dt, 0.5);
 
                 // log the total energy of each system
                 P.compute_ke_total();

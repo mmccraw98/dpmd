@@ -25,11 +25,14 @@ __global__ void update_positions_kernel_cell(
     const double* __restrict__ last_x,
     const double* __restrict__ last_y,
     double* __restrict__ disp2,
-    double scale
+    const double* __restrict__ scale,
+    const double scale2
 ) {
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    const double s = scale[sid] * scale2;
 
     double pos_x = x[i];
     double pos_y = y[i];
@@ -37,8 +40,8 @@ __global__ void update_positions_kernel_cell(
     const double vel_y = vy[i];
 
     // Update positions
-    pos_x += vel_x * scale;
-    pos_y += vel_y * scale;
+    pos_x += vel_x * s;
+    pos_y += vel_y * s;
     x[i] = pos_x;
     y[i] = pos_y;
 
@@ -49,7 +52,6 @@ __global__ void update_positions_kernel_cell(
     disp2[i] = d2;
 
     // Determine per-system rebuild flag
-    const int sid = md::geo::g_sys.id[i];
     const double thresh2 = md::geo::g_neigh.thresh2[sid];
     if (d2 > thresh2) atomicOr(&g_disk.rebuild_flag[sid], 1u);
 }
@@ -60,13 +62,16 @@ __global__ void update_positions_kernel_naive(
     double* __restrict__ y,
     const double* __restrict__ vx,
     const double* __restrict__ vy,
-    double scale
+    const double* __restrict__ scale,
+    const double scale2
 ) {
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
-    x[i] += vx[i] * scale;
-    y[i] += vy[i] * scale;
+    const int sid = md::geo::g_sys.id[i];
+    const double s = scale[sid] * scale2;
+    x[i] += vx[i] * s;
+    y[i] += vy[i] * s;
 }
 
 // Update velocities given forces and a scale factor
@@ -75,13 +80,15 @@ __global__ void update_velocities_kernel(
     double* __restrict__ vy,
     const double* __restrict__ fx,
     const double* __restrict__ fy,
-    double scale)
+    const double* __restrict__ scale,
+    const double scale2)
 {
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
 
-    const double scaled_mass_inv = scale / g_disk.mass[i];
+    const double scaled_mass_inv = scale[sid] * scale2 / g_disk.mass[i];
 
     const double vxi = vx[i];
     const double vyi = vy[i];
@@ -106,10 +113,12 @@ __global__ void compute_pair_forces_kernel(
 
     const int sid = md::geo::g_sys.id[i];
     const double e_i = g_disk.e_interaction[sid];
-    const double box_size_x = md::geo::g_box.size_x[sid];
-    const double box_size_y = md::geo::g_box.size_y[sid];
-    const double box_inv_x = md::geo::g_box.inv_x[sid];
-    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    #ifdef ENABLE_PBC_DIST
+        const double box_size_x = md::geo::g_box.size_x[sid];
+        const double box_size_y = md::geo::g_box.size_y[sid];
+        const double box_inv_x = md::geo::g_box.inv_x[sid];
+        const double box_inv_y = md::geo::g_box.inv_y[sid];
+    #endif
 
     const double xi = x[i], yi = y[i];
     const double ri = g_disk.rad[i];
@@ -124,7 +133,13 @@ __global__ void compute_pair_forces_kernel(
         const double rj = g_disk.rad[j];
 
         double dx, dy;
-        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+        #ifdef ENABLE_PBC_DIST
+            double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+        #else
+            dx = xj - xi;
+            dy = yj - yi;
+            double r2 = dx * dx + dy * dy;
+        #endif
 
         // Early reject if no overlap: r^2 >= (ri+rj)^2
         const double radsum = ri + rj;
@@ -178,7 +193,7 @@ __global__ void compute_wall_forces_kernel(
     if (xi < ri) {
         const double delta = ri - xi;
         const double fmag = e_i * delta;
-        fxi -= fmag;
+        fxi += fmag;
         pei += (0.5 * e_i * delta * delta) * 0.5;
     }
     if (xi > box_size_x - ri) {
@@ -190,7 +205,7 @@ __global__ void compute_wall_forces_kernel(
     if (yi < ri) {
         const double delta = ri - yi;
         const double fmag = e_i * delta;
-        fyi -= fmag;
+        fyi += fmag;
         pei += (0.5 * e_i * delta * delta) * 0.5;
     }
     if (yi > box_size_y - ri) {
@@ -211,13 +226,15 @@ __global__ void compute_damping_forces_kernel(
     const double* __restrict__ vy,
     double* __restrict__ fx,
     double* __restrict__ fy,
-    double scale
+    const double* __restrict__ scale
 ) {
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
-    fx[i] += -vx[i] * scale;
-    fy[i] += -vy[i] * scale;
+    const int sid = md::geo::g_sys.id[i];
+    const double s = scale[sid];
+    fx[i] += -vx[i] * s;
+    fy[i] += -vy[i] * s;
 }
 
 // Compute the kinetic energy of each particle
@@ -229,8 +246,54 @@ __global__ void compute_ke_kernel(
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
-    ke[i] = 0.5 * (vx[i] * vx[i] + vy[i] * vy[i]);
+    ke[i] = 0.5 * (vx[i] * vx[i] + vy[i] * vy[i]) * g_disk.mass[i];
 }
+
+// Scale the velocities of the particles in each system
+__global__ void scale_velocities_kernel(
+    double* __restrict__ vx,
+    double* __restrict__ vy,
+    const double* __restrict__ scale
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    vx[i] *= scale[sid];
+    vy[i] *= scale[sid];
+}
+
+// Mix velocities and forces - system-level alpha, primarily used for FIRE
+__global__ void mix_velocities_and_forces_kernel(
+    double* __restrict__ vx,
+    double* __restrict__ vy,
+    const double* __restrict__ fx,
+    const double* __restrict__ fy,
+    const double* __restrict__ alpha
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    const double a = alpha[sid];
+    double vxi = vx[i];
+    double vyi = vy[i];
+    double fxi = fx[i];
+    double fyi = fy[i];
+    double force_norm = sqrt(fxi * fxi + fyi * fyi);
+    double vel_norm = sqrt(vxi * vxi + vyi * vyi);
+    double mixing_ratio = 0.0;
+    if (force_norm > 1e-16) {
+        mixing_ratio = vel_norm / force_norm * a;
+    } else {
+        vxi = 0.0;
+        vyi = 0.0;
+        mixing_ratio = 0.0;
+    }
+    vx[i] = vxi * (1 - a) + fxi * mixing_ratio;
+    vy[i] = vyi * (1 - a) + fyi * mixing_ratio;
+}
+
 
 } // namespace kernels
 
@@ -256,18 +319,18 @@ void Disk::compute_wall_forces_impl() {
     );
 }
 
-void Disk::compute_damping_forces_impl(double scale) {
+void Disk::compute_damping_forces_impl(df::DeviceField1D<double> scale) {
     const int N = n_particles();
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);
     CUDA_LAUNCH(kernels::compute_damping_forces_kernel, G, B,
         this->vel.xptr(), this->vel.yptr(),
         this->force.xptr(), this->force.yptr(),
-        scale
+        scale.ptr()
     );
 }
 
-void Disk::update_positions_impl(double scale) {
+void Disk::update_positions_impl(df::DeviceField1D<double> scale, double scale2) {
     const int N = n_particles();
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);
@@ -278,29 +341,51 @@ void Disk::update_positions_impl(double scale) {
                 this->vel.xptr(), this->vel.yptr(),
                 this->last_pos.xptr(), this->last_pos.yptr(),
                 this->disp2.ptr(),
-                scale
+                scale.ptr(), scale2
             );
             break;
         case NeighborMethod::Naive:
             CUDA_LAUNCH(kernels::update_positions_kernel_naive, G, B,
                 this->pos.xptr(), this->pos.yptr(),
                 this->vel.xptr(), this->vel.yptr(),
-                scale
+                scale.ptr(), scale2
             );
             break;
     }
 }
 
-void Disk::update_velocities_impl(double scale) {
+void Disk::update_velocities_impl(df::DeviceField1D<double> scale, double scale2) {
     const int N = n_particles();
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);
     CUDA_LAUNCH(kernels::update_velocities_kernel, G, B,
         this->vel.xptr(), this->vel.yptr(),
         this->force.xptr(), this->force.yptr(),
-        scale
+        scale.ptr(), scale2
     );
 }
+
+void Disk::scale_velocities_impl(df::DeviceField1D<double> scale) {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::scale_velocities_kernel, G, B,
+        this->vel.xptr(), this->vel.yptr(),
+        scale.ptr()
+    );
+}
+
+void Disk::mix_velocities_and_forces_impl(df::DeviceField1D<double> alpha) {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::mix_velocities_and_forces_kernel, G, B,
+        this->vel.xptr(), this->vel.yptr(),
+        this->force.xptr(), this->force.yptr(),
+        alpha.ptr()
+    );
+}
+
 
 void Disk::sync_class_constants_impl() {
     bind_disk_globals(this->e_interaction.ptr(), this->mass.ptr(), this->rad.ptr(), this->rebuild_flag.ptr());

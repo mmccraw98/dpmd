@@ -1,5 +1,9 @@
 # rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_CUDA_DEBUG=ON .. && make -j8
 # rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA_DEBUG=OFF .. && make -j8
+# -DCMAKE_BUILD_TYPE= [Debug, Release]
+# -DENABLE_CUDA_DEBUG= [ON, OFF]
+# -DENABLE_PBC_DIST= [ON, OFF]
+
 cmake_minimum_required(VERSION 3.18)
 
 # Project setup with CUDA and C languages (C needed for HDF5)
@@ -16,6 +20,9 @@ set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
 # Debug option for CUDA debugging
 option(ENABLE_CUDA_DEBUG "Enable CUDA debug mode with heavy sync and error checking" OFF)
+
+# PBC option for periodic boundary conditions
+option(ENABLE_PBC_DIST "Enable periodic boundary conditions in force calculations" ON)
 
 # Find required packages
 find_package(HDF5 REQUIRED COMPONENTS C)
@@ -81,6 +88,8 @@ set(TEST_SOURCES
     tests/test_disk_system_naive_parallelism.cu
     tests/test_disk_system_cell_parallelism.cu
     tests/rigid_bumpy_box_sample.cu
+    tests/jam_rigid_bumpy.cu
+    tests/damped_jam_rigid_bumpy.cu
 )
 
 # Create test executables

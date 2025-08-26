@@ -97,6 +97,8 @@ int main(int argc, char** argv) {
     P.vertex_pe.fill(0.0);
     P.vertex_force.fill(0.0, 0.0);
     P.force.fill(0.0, 0.0);
+    P.angular_vel.fill(0.0);
+    P.torque.fill(0.0);
     P.pe.fill(0.0);
     P.vertex_rad.from_host(vertex_rad);
     P.pos.enable_rng(rng_seed);

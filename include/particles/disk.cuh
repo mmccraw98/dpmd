@@ -37,13 +37,19 @@ public:
     void compute_wall_forces_impl();
 
     // Compute the damping forces
-    void compute_damping_forces_impl(double scale);
+    void compute_damping_forces_impl(df::DeviceField1D<double> scale);
 
     // Update the positions of the particles
-    void update_positions_impl(double scale);
+    void update_positions_impl(df::DeviceField1D<double> scale, double scale2);
 
     // Update the velocities of the particles
-    void update_velocities_impl(double scale);
+    void update_velocities_impl(df::DeviceField1D<double> scale, double scale2);
+
+    // Scale the velocities of the particles
+    void scale_velocities_impl(df::DeviceField1D<double> scale);
+
+    // Mix velocities and forces - system-level alpha, primarily used for FIRE
+    void mix_velocities_and_forces_impl(df::DeviceField1D<double> alpha);
 
     // Sync the class constants
     void sync_class_constants_impl();
@@ -83,6 +89,11 @@ public:
 
     // Set random positions within the box
     void set_random_positions_impl(double box_pad_x, double box_pad_y);
+
+    // Compute the total power for each system
+    void compute_fpower_total_impl() {
+        throw std::runtime_error("compute_fpower_total_impl not implemented for disk");
+    }
 };
 
 }
