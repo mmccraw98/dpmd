@@ -1,6 +1,6 @@
 #include <cuda_runtime.h>
 #include "kernels/base_particle_kernels.cuh"
-#include "utils/cuda_debug.hpp"
+#include "utils/cuda_utils.cuh"
 
 namespace md { namespace geo {
 

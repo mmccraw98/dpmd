@@ -1,7 +1,7 @@
 #include "particles/rigid_bumpy.cuh"
 #include "utils/h5_io.hpp"
 #include "utils/device_fields.cuh"
-#include "utils/cuda_debug.hpp"
+#include "utils/cuda_utils.cuh"
 
 namespace k {
 

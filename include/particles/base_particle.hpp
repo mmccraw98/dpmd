@@ -1,7 +1,7 @@
 #pragma once
 #include "utils/device_fields.cuh"
 #include "kernels/base_particle_kernels.cuh"
-#include "kernels/launch_config.cuh"
+#include "utils/cuda_utils.cuh"
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/copy.h>

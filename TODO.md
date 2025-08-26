@@ -1,4 +1,3 @@
-// TODO: merge cuda_debug and launch_config, rename, store in utils
 // TODO: test the wall forces and energy conservation
 // TODO: test the jamming code using disks
 // TODO: add tests for wall forces for disks

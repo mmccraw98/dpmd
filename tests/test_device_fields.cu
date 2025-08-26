@@ -9,7 +9,7 @@
 #include <thrust/fill.h>
 #include <thrust/sequence.h>
 
-#include "utils/cuda_debug.hpp"
+#include "utils/cuda_utils.cuh"
 #include "utils/device_fields.cuh"
 
 // -----------------------------

@@ -1,5 +1,6 @@
 #pragma once
 #include "particles/base_particle.hpp"
+#include "utils/cuda_utils.cuh"
 #include "kernels/base_point_particle_kernels.cuh"
 #include <cub/device/device_segmented_reduce.cuh>
 #include <thrust/binary_search.h>

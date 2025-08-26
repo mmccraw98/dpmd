@@ -8,8 +8,7 @@
 #include <thrust/sequence.h>
 
 #include <curand_kernel.h>
-#include "utils/cuda_debug.hpp"
-#include "kernels/launch_config.cuh"
+#include "utils/cuda_utils.cuh"
 
 #include <vector>
 #include <string>
