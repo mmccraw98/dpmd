@@ -62,12 +62,16 @@ set(CORE_PARTICLE_SOURCES
     src/particles/rigid_bumpy.cu
 )
 
+set(CORE_INTEGRATOR_SOURCES
+    src/integrators/fire.cu
+)
+
 set(CORE_UTILS_SOURCES
     src/utils/device_fields.cu
 )
 
 # Create core library
-add_library(dpmd_core ${CORE_KERNEL_SOURCES} ${CORE_PARTICLE_SOURCES} ${CORE_UTILS_SOURCES})
+add_library(dpmd_core ${CORE_KERNEL_SOURCES} ${CORE_PARTICLE_SOURCES} ${CORE_INTEGRATOR_SOURCES} ${CORE_UTILS_SOURCES})
 
 # Link libraries to core
 target_link_libraries(dpmd_core ${HDF5_LIBRARIES})

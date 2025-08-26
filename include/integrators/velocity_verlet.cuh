@@ -21,6 +21,9 @@ public:
     }
     BaseVelocityVerlet(ParticleT& p, df::DeviceField1D<double> dt_init) : Base(p) {
         dt.resize(p.n_systems());
+        if (dt_init.size() != p.n_systems()) {
+            throw std::invalid_argument("BaseVelocityVerlet: dt_init must have the same size as the number of systems");
+        }
         dt_half.resize(p.n_systems());
         dt.copy_from(dt_init);
         dt_half.copy_from(dt_init);
