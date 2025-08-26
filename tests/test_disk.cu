@@ -1,6 +1,8 @@
 // test_disk.cu
 
 #include "particles/disk.cuh"
+#include "integrators/velocity_verlet.cuh"
+#include "integrators/damped_velocity_verlet.cuh"
 #include <cmath>
 #include <algorithm>
 
@@ -300,15 +302,17 @@ int main() {
         P.sync_class_constants();
         P.init_neighbors();
 
+        // make the integrator
+        double dt = 1e-2;
+        double damping = 1e0;
+        md::integrators::DampedVelocityVerletWall dvvw(P, dt, damping);
+        dvvw.init();  // compute the initial forces
+
         // quickly equilibrate the system and get initial conditions
         for (int rep = 0; rep < 10; rep++) {
+            dvvw.init();  // compute the initial forces
             for (int i = 0; i < 500; i++) {
-                P.update_velocities(dt, 0.5);
-                P.update_positions(dt, 1.0);
-                P.check_neighbors();
-                P.compute_wall_forces();
-                P.compute_damping_forces(damping);
-                P.update_velocities(dt, 0.5);
+                dvvw.step();
             }
             P.force.fill(0.0, 0.0);
             P.vel.fill(0.0, 0.0);
@@ -368,12 +372,11 @@ int main() {
 
             dt.fill(dt_test);
 
+            md::integrators::VelocityVerlet vv(P, dt);
+            vv.init();
+
             for (int step = 0; step < n_steps; step++) {
-                P.update_velocities(dt, 0.5);
-                P.update_positions(dt, 1.0);
-                P.check_neighbors();
-                P.compute_forces();
-                P.update_velocities(dt, 0.5);
+                vv.step();
 
                 // log the total energy of each system
                 P.compute_ke_total();
@@ -444,12 +447,11 @@ int main() {
 
             dt.fill(dt_test);
 
+            md::integrators::VelocityVerlet vv(P, dt);
+            vv.init();
+
             for (int step = 0; step < n_steps; step++) {
-                P.update_velocities(dt, 0.5);
-                P.update_positions(dt, 1.0);
-                P.check_neighbors();
-                P.compute_forces();
-                P.update_velocities(dt, 0.5);
+                vv.step();
 
                 // log the total energy of each system
                 P.compute_ke_total();
@@ -521,12 +523,11 @@ int main() {
 
             dt.fill(dt_test);
 
+            md::integrators::VelocityVerletWall vvw(P, dt);
+            vvw.init();
+
             for (int step = 0; step < n_steps; step++) {
-                P.update_velocities(dt, 0.5);
-                P.update_positions(dt, 1.0);
-                P.check_neighbors();
-                P.compute_wall_forces();
-                P.update_velocities(dt, 0.5);
+                vvw.step();
 
                 // log the total energy of each system
                 P.compute_ke_total();
@@ -597,12 +598,11 @@ int main() {
 
             dt.fill(dt_test);
 
+            md::integrators::VelocityVerletWall vvw(P, dt);
+            vvw.init();
+
             for (int step = 0; step < n_steps; step++) {
-                P.update_velocities(dt, 0.5);
-                P.update_positions(dt, 1.0);
-                P.check_neighbors();
-                P.compute_wall_forces();
-                P.update_velocities(dt, 0.5);
+                vvw.step();
 
                 // log the total energy of each system
                 P.compute_ke_total();

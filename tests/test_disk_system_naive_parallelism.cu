@@ -1,6 +1,7 @@
 // test_disk_system_parallelism.cu
 
 #include "particles/disk.cuh"
+#include "integrators/velocity_verlet.cuh"
 #include <cmath>
 #include <algorithm>
 
@@ -83,18 +84,15 @@ int main(int argc, char** argv) {
         P.sync_class_constants();
         P.init_neighbors();
 
-        P.compute_forces();
+        md::integrators::VelocityVerlet vv(P, dt);
+        vv.init();
 
         // start the timer
         auto start = std::chrono::high_resolution_clock::now();
 
 
         for (int i = 0; i < n_steps; i++) {
-            P.update_velocities(dt, 0.5);
-            P.update_positions(dt, 1.0);
-            P.check_neighbors();
-            P.compute_forces();
-            P.update_velocities(dt, 0.5);
+            vv.step();
         }
         cudaDeviceSynchronize();
 

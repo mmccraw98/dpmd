@@ -1,14 +1,14 @@
 // TODO: make a basic integrator
+// TODO: rename common.cuh and common_globals.cu, confusing - maybe base_particle_kernels would be better and more in line with remaining files
+// TODO: merge cuda_debug and launch_config, rename, store in utils
 // TODO: test the wall forces
 // TODO: test the jamming code using disks
 // TODO: add tests for wall forces for disks
 // TODO: add tests for rigid bumpy dynamics
 // TODO: implement cell list for rigid bumpy particles
-// TODO: add integrators - can be basically identical to dpcuda2
+// TODO: add remaining integrators from dpcuda2
 // TODO: remove vertex mass from rigid bumpy
 // TODO: test various position, velocity, force update schemes for the rigid bumpy particles
-// TODO: merge cuda_debug and launch_config, rename, store in utils
-// TODO: rename common.cuh and common_globals.cu, confusing - maybe base_particle_kernels would be better and more in line with remaining files
 // TODO: add particle init function (performs tested series of steps to set up all data)
 // TODO: add a particle validate function (checks everything is synced, sizes match expectation, etc,)
 // TODO: mirror particle classes in python as data classes
