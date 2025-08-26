@@ -1,5 +1,6 @@
 #include "particles/disk.cuh"
 #include "integrators/velocity_verlet.cuh"
+#include "integrators/damped_velocity_verlet.cuh"
 #include <cmath>
 #include <algorithm>
 #include "utils/h5_io.hpp"
@@ -90,6 +91,18 @@ int main(int argc, char** argv) {
     P.sync_class_constants();
     P.init_neighbors();
     P.compute_packing_fraction();
+
+    {  // Equilibrate initially
+        df::DeviceField1D<double> damping(S); damping.fill(1.0);
+        md::integrators::DampedVelocityVerlet dvv(P, dt, damping);
+        dvv.init();
+        for (int i = 0; i < n_steps; i++) {
+            dvv.step();
+        }
+    }
+
+    double vel_scale = 5e-2;
+    P.vel.stateless_rand_uniform(-vel_scale, vel_scale, -vel_scale, vel_scale);
 
     md::integrators::VelocityVerlet vv(P, dt);
     vv.init();

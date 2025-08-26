@@ -13,25 +13,28 @@ class BaseVelocityVerlet : public BaseIntegrator<Derived, ParticleT> {
 public:
     using Base::Base;  // inherit Base(p)
 
-    BaseVelocityVerlet(ParticleT& p, double dt) : Base(p) {
-        dt_.resize(p.n_systems());     dt_.fill(dt);
-        dt_half_.resize(p.n_systems()); dt_half_.fill(0.5 * dt);
+    BaseVelocityVerlet(ParticleT& p, double dt_init) : Base(p) {
+        dt.resize(p.n_systems());
+        dt.fill(dt_init);
+        dt_half.resize(p.n_systems());
+        dt_half.fill(0.5 * dt_init);
     }
-    BaseVelocityVerlet(ParticleT& p, df::DeviceField1D<double> dt) : Base(p) {
-        dt_ = dt;
-        dt_half_.resize(p.n_systems());
-        dt_half_.copy_from(dt_);
-        dt_half_.scale(0.5);
+    BaseVelocityVerlet(ParticleT& p, df::DeviceField1D<double> dt_init) : Base(p) {
+        dt.resize(p.n_systems());
+        dt_half.resize(p.n_systems());
+        dt.copy_from(dt_init);
+        dt_half.copy_from(dt_init);
+        dt_half.scale(0.5);
     }
 
     // The actual VV step; Base::step() will call this
     inline void step_impl() {
         auto& P = this->particle();
-        P.update_velocities(dt_half_);
-        P.update_positions(dt_);
+        P.update_velocities(dt_half);
+        P.update_positions(dt);
         P.check_neighbors();
         this->derived().compute_particle_forces_impl();
-        P.update_velocities(dt_half_);
+        P.update_velocities(dt_half);
     }
 
     inline void init_impl() {
@@ -39,7 +42,7 @@ public:
     }
 
 protected:
-    df::DeviceField1D<double> dt_, dt_half_;
+    df::DeviceField1D<double> dt, dt_half;
 };
 
 
@@ -49,8 +52,8 @@ class VelocityVerlet final
 : public BaseVelocityVerlet<VelocityVerlet<ParticleT>, ParticleT> {
     using Base = BaseVelocityVerlet<VelocityVerlet<ParticleT>, ParticleT>;
 public:
-    VelocityVerlet(ParticleT& p, double dt) : Base(p, dt) {}
-    VelocityVerlet(ParticleT& p, const df::DeviceField1D<double>& dt) : Base(p, dt) {}
+    VelocityVerlet(ParticleT& p, double dt_init) : Base(p, dt_init) {}
+    VelocityVerlet(ParticleT& p, const df::DeviceField1D<double>& dt_init) : Base(p, dt_init) {}
 
     inline void compute_particle_forces_impl() {
         this->particle().compute_forces();
@@ -63,8 +66,8 @@ class VelocityVerletWall final
 : public BaseVelocityVerlet<VelocityVerletWall<ParticleT>, ParticleT> {
     using Base = BaseVelocityVerlet<VelocityVerletWall<ParticleT>, ParticleT>;
 public:
-    VelocityVerletWall(ParticleT& p, double dt) : Base(p, dt) {}
-    VelocityVerletWall(ParticleT& p, const df::DeviceField1D<double>& dt) : Base(p, dt) {}
+    VelocityVerletWall(ParticleT& p, double dt_init) : Base(p, dt_init) {}
+    VelocityVerletWall(ParticleT& p, const df::DeviceField1D<double>& dt_init) : Base(p, dt_init) {}
 
     inline void compute_particle_forces_impl() {
         this->particle().compute_wall_forces();

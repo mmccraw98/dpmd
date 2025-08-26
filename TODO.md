@@ -1,6 +1,4 @@
-// TODO: test the wall forces and energy conservation
 // TODO: test the jamming code using disks
-// TODO: add tests for wall forces for disks
 // TODO: add tests for rigid bumpy dynamics
 // TODO: implement cell list for rigid bumpy particles
 // TODO: add remaining integrators from dpcuda2

@@ -13,28 +13,33 @@ class BaseDampedVelocityVerlet : public BaseIntegrator<Derived, ParticleT> {
 public:
     using Base::Base;  // inherit Base(p)
 
-    BaseDampedVelocityVerlet(ParticleT& p, double dt, double damping) : Base(p) {
-        dt_.resize(p.n_systems());     dt_.fill(dt);
-        dt_half_.resize(p.n_systems()); dt_half_.fill(0.5 * dt);
-        damping_.resize(p.n_systems()); damping_.fill(damping);
+    BaseDampedVelocityVerlet(ParticleT& p, double dt_init, double damping_init) : Base(p) {
+        dt.resize(p.n_systems());
+        dt.fill(dt_init);
+        dt_half.resize(p.n_systems());
+        dt_half.fill(0.5 * dt_init);
+        damping.resize(p.n_systems());
+        damping.fill(damping_init);
     }
-    BaseDampedVelocityVerlet(ParticleT& p, df::DeviceField1D<double> dt, df::DeviceField1D<double> damping) : Base(p) {
-        dt_ = dt;
-        dt_half_.resize(p.n_systems());
-        dt_half_.copy_from(dt_);
-        dt_half_.scale(0.5);
-        damping_ = damping;
+    BaseDampedVelocityVerlet(ParticleT& p, df::DeviceField1D<double> dt_init, df::DeviceField1D<double> damping_init) : Base(p) {
+        dt.resize(p.n_systems());
+        dt_half.resize(p.n_systems());
+        dt.copy_from(dt_init);
+        dt_half.copy_from(dt_init);
+        dt_half.scale(0.5);
+        damping.resize(p.n_systems());
+        damping.copy_from(damping_init);
     }
 
     // The actual VV step; Base::step() will call this
     inline void step_impl() {
         auto& P = this->particle();
-        P.update_velocities(dt_half_);
-        P.update_positions(dt_);
+        P.update_velocities(dt_half);
+        P.update_positions(dt);
         P.check_neighbors();
         this->derived().compute_particle_forces_impl();
-        P.compute_damping_forces(damping_);
-        P.update_velocities(dt_half_);
+        P.compute_damping_forces(damping);
+        P.update_velocities(dt_half);
     }
 
     inline void init_impl() {
@@ -42,8 +47,8 @@ public:
     }
 
 protected:
-    df::DeviceField1D<double> dt_, dt_half_;
-    df::DeviceField1D<double> damping_;
+    df::DeviceField1D<double> dt, dt_half;
+    df::DeviceField1D<double> damping;
 };
 
 
@@ -53,8 +58,8 @@ class DampedVelocityVerlet final
 : public BaseDampedVelocityVerlet<DampedVelocityVerlet<ParticleT>, ParticleT> {
     using Base = BaseDampedVelocityVerlet<DampedVelocityVerlet<ParticleT>, ParticleT>;
 public:
-    DampedVelocityVerlet(ParticleT& p, double dt, double damping) : Base(p, dt, damping) {}
-    DampedVelocityVerlet(ParticleT& p, const df::DeviceField1D<double>& dt, const df::DeviceField1D<double>& damping) : Base(p, dt, damping) {}
+    DampedVelocityVerlet(ParticleT& p, double dt_init, double damping_init) : Base(p, dt_init, damping_init) {}
+    DampedVelocityVerlet(ParticleT& p, const df::DeviceField1D<double>& dt_init, const df::DeviceField1D<double>& damping_init) : Base(p, dt_init, damping_init) {}
 
     inline void compute_particle_forces_impl() {
         this->particle().compute_forces();
@@ -67,8 +72,8 @@ class DampedVelocityVerletWall final
 : public BaseDampedVelocityVerlet<DampedVelocityVerletWall<ParticleT>, ParticleT> {
     using Base = BaseDampedVelocityVerlet<DampedVelocityVerletWall<ParticleT>, ParticleT>;
 public:
-    DampedVelocityVerletWall(ParticleT& p, double dt, double damping) : Base(p, dt, damping) {}
-    DampedVelocityVerletWall(ParticleT& p, const df::DeviceField1D<double>& dt, const df::DeviceField1D<double>& damping) : Base(p, dt, damping) {}
+    DampedVelocityVerletWall(ParticleT& p, double dt_init, double damping_init) : Base(p, dt_init, damping_init) {}
+    DampedVelocityVerletWall(ParticleT& p, const df::DeviceField1D<double>& dt_init, const df::DeviceField1D<double>& damping_init) : Base(p, dt_init, damping_init) {}
 
     inline void compute_particle_forces_impl() {
         this->particle().compute_wall_forces();
