@@ -56,6 +56,9 @@ public:
     // Scale the velocities of the particles
     void scale_velocities_impl(df::DeviceField1D<double> scale);
 
+    // Scale the positions of the particles
+    void scale_positions_impl(df::DeviceField1D<double> scale);
+
     // Mix velocities and forces - system-level alpha, primarily used for FIRE
     void mix_velocities_and_forces_impl(df::DeviceField1D<double> alpha);
 
@@ -91,6 +94,22 @@ public:
 
     // Compute the total power for each system
     void compute_fpower_total_impl();
+
+    void save_state_impl(df::DeviceField1D<int> flag, int true_val);
+
+    void restore_state_impl(df::DeviceField1D<int> flag, int true_val);
+
+private:
+    df::DeviceField2D<double> last_state_pos;
+    df::DeviceField1D<double> last_state_angle;
+    df::DeviceField1D<double> last_state_mass;
+    df::DeviceField1D<int> last_state_n_vertices_per_particle;
+    df::DeviceField1D<int> last_state_particle_offset;
+    df::DeviceField1D<double> last_state_moment_inertia;
+    df::DeviceField1D<double> last_state_vertex_rad;
+    df::DeviceField2D<double> last_state_vertex_pos;
+    df::DeviceField1D<int> last_state_vertex_particle_id;
+    df::DeviceField2D<double> last_state_box_size;
 };
 
 }

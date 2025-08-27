@@ -1,8 +1,13 @@
 // TODO: test the jamming code using disks
 // TODO: add tests for rigid bumpy dynamics
+// TODO: add box resizing
 // TODO: implement cell list for rigid bumpy particles
 // TODO: add remaining integrators from dpcuda2
 // TODO: remove vertex mass from rigid bumpy
+// TODO: remove redundancies in the jamming and minimizing code
+// TODO: improve the set/restore last state code
+// TODO: verify that the set/restore last state code works with cell lists
+// TODO: verify that the box resizing code works with cell lists
 // TODO: test various position, velocity, force update schemes for the rigid bumpy particles
 // TODO: add particle init function (performs tested series of steps to set up all data)
 // TODO: add a particle validate function (checks everything is synced, sizes match expectation, etc,)

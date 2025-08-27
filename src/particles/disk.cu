@@ -290,6 +290,21 @@ __global__ void scale_velocities_kernel(
     vy[i] *= scale[sid];
 }
 
+// Scale the positions of the particles in each system
+__global__ void scale_positions_kernel(
+    double* __restrict__ x,
+    double* __restrict__ y,
+    const double* __restrict__ scale
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    x[i] *= scale[sid];
+    y[i] *= scale[sid];
+}
+
+
 // Mix velocities and forces - system-level alpha, primarily used for FIRE
 __global__ void mix_velocities_and_forces_kernel(
     double* __restrict__ vx,
@@ -321,8 +336,99 @@ __global__ void mix_velocities_and_forces_kernel(
     vy[i] = vyi * (1 - a) + fyi * mixing_ratio;
 }
 
+// Functor to compute power: force_x * vel_x + force_y * vel_y
+struct PowerFunctor {
+    __device__ double operator()(const thrust::tuple<double, double, double, double>& t) const {
+        double fx = thrust::get<0>(t);
+        double vx = thrust::get<1>(t);
+        double fy = thrust::get<2>(t);
+        double vy = thrust::get<3>(t);
+        return fx * vx + fy * vy;
+    }
+};
+
+__global__ void save_particle_state_kernel(
+    double* __restrict__ x,
+    double* __restrict__ y,
+    double* __restrict__ last_x,
+    double* __restrict__ last_y,
+    double* __restrict__ rad,
+    double* __restrict__ last_rad,
+    double* __restrict__ mass,
+    double* __restrict__ last_mass,
+    int* __restrict__ flag,
+    int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = md::geo::g_sys.n_particles;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    if (flag[sid] != true_val) return;
+    last_x[i] = x[i];
+    last_y[i] = y[i];
+    last_rad[i] = rad[i];
+    last_mass[i] = mass[i];
+}
+
+__global__ void save_system_state_kernel(
+    double* __restrict__ box_size_x,
+    double* __restrict__ box_size_y,
+    double* __restrict__ last_box_size_x,
+    double* __restrict__ last_box_size_y,
+    int* __restrict__ flag,
+    int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = md::geo::g_sys.n_systems;
+    if (i >= S) return;
+    const int sid = md::geo::g_sys.id[i];
+    if (flag[sid] != true_val) return;
+    last_box_size_x[i] = box_size_x[i];
+    last_box_size_y[i] = box_size_y[i];
+}
+
+__global__ void restore_particle_state_kernel(
+    double* __restrict__ x,
+    double* __restrict__ y,
+    double* __restrict__ last_x,
+    double* __restrict__ last_y,
+    double* __restrict__ rad,
+    double* __restrict__ last_rad,
+    double* __restrict__ mass,
+    double* __restrict__ last_mass,
+    int* __restrict__ flag,
+    int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = md::geo::g_sys.n_particles;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    if (flag[sid] != true_val) return;
+    x[i] = last_x[i];
+    y[i] = last_y[i];
+    rad[i] = last_rad[i];
+    mass[i] = last_mass[i];
+}
+
+__global__ void restore_system_state_kernel(
+    double* __restrict__ box_size_x,
+    double* __restrict__ box_size_y,
+    double* __restrict__ last_box_size_x,
+    double* __restrict__ last_box_size_y,
+    int* __restrict__ flag,
+    int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = md::geo::g_sys.n_systems;
+    if (i >= S) return;
+    const int sid = md::geo::g_sys.id[i];
+    if (flag[sid] != true_val) return;
+    box_size_x[i] = last_box_size_x[i];
+    box_size_y[i] = last_box_size_y[i];
+}
 
 } // namespace kernels
+
 
 void Disk::compute_forces_impl() {
     const int N = n_particles();
@@ -402,6 +508,16 @@ void Disk::scale_velocities_impl(df::DeviceField1D<double> scale) {
     );
 }
 
+void Disk::scale_positions_impl(df::DeviceField1D<double> scale) {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::scale_positions_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        scale.ptr()
+    );
+}
+
 void Disk::mix_velocities_and_forces_impl(df::DeviceField1D<double> alpha) {
     const int N = n_particles();
     auto B = md::launch::threads_for();
@@ -411,6 +527,52 @@ void Disk::mix_velocities_and_forces_impl(df::DeviceField1D<double> alpha) {
         this->force.xptr(), this->force.yptr(),
         alpha.ptr()
     );
+}
+
+void Disk::compute_fpower_total_impl() {
+    cudaStream_t stream = 0;
+    const int S = this->n_systems();
+    if (this->fpower_total.size() != S) {
+        this->fpower_total.resize(S);
+    }
+
+    void* d_temp = this->cub_sys_agg.ptr();
+    size_t temp_bytes = this->cub_sys_agg.size();
+
+    // Create transform iterator that computes force·velocity on-the-fly
+    auto input_iter = thrust::make_transform_iterator(
+        thrust::make_zip_iterator(thrust::make_tuple(
+            this->force.xptr(),
+            this->vel.xptr(),
+            this->force.yptr(),
+            this->vel.yptr()
+        )),
+        kernels::PowerFunctor()
+    );
+
+    // 1) size request
+    cub::DeviceSegmentedReduce::Sum(
+        nullptr, temp_bytes,
+        input_iter, this->fpower_total.ptr(),
+        S,
+        this->system_offset.ptr(),
+        this->system_offset.ptr() + 1,
+        stream);
+
+    // 2) ensure workspace
+    if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
+        this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+        d_temp = this->cub_sys_agg.ptr();
+    }
+
+    // 3) run
+    cub::DeviceSegmentedReduce::Sum(
+        d_temp, temp_bytes,
+        input_iter, this->fpower_total.ptr(),
+        S,
+        this->system_offset.ptr(),
+        this->system_offset.ptr() + 1,
+        stream);
 }
 
 
@@ -476,6 +638,70 @@ void Disk::compute_ke_impl() {
 
 void Disk::set_random_positions_impl(double box_pad_x, double box_pad_y) {
     throw std::runtime_error("Disk::set_random_positions_impl: not implemented");
+}
+
+void Disk::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
+    if (this->last_state_pos.size() != this->pos.size()) {
+        this->last_state_pos.resize(this->pos.size());
+    }
+    if (this->last_state_rad.size() != this->rad.size()) {
+        this->last_state_rad.resize(this->rad.size());
+    }
+    if (this->last_state_mass.size() != this->mass.size()) {
+        this->last_state_mass.resize(this->mass.size());
+    }
+    if (this->last_state_box_size.size() != this->box_size.size()) {
+        this->last_state_box_size.resize(this->box_size.size());
+    }
+    
+    const int N = n_particles();
+    const int S = n_systems();
+    auto B = md::launch::threads_for();
+    auto G_N = md::launch::blocks_for(N);
+    auto G_S = md::launch::blocks_for(S);
+    CUDA_LAUNCH(kernels::save_particle_state_kernel, G_N, B,
+        this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
+        this->rad.ptr(), this->last_state_rad.ptr(),
+        this->mass.ptr(), this->last_state_mass.ptr(),
+        flag.ptr(), true_val
+    );
+    CUDA_LAUNCH(kernels::save_system_state_kernel, G_S, B,
+        this->box_size.xptr(), this->box_size.yptr(), this->last_state_box_size.xptr(), this->last_state_box_size.yptr(),
+        flag.ptr(), true_val
+    );
+}
+
+void Disk::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
+    if (this->last_state_pos.size() != this->pos.size()) {
+        throw std::runtime_error("Disk::restore_state_impl: last_state_pos is not initialized");
+    }
+    if (this->last_state_rad.size() != this->rad.size()) {
+        throw std::runtime_error("Disk::restore_state_impl: last_state_rad is not initialized");
+    }
+    if (this->last_state_mass.size() != this->mass.size()) {
+        throw std::runtime_error("Disk::restore_state_impl: last_state_mass is not initialized");
+    }
+    if (this->last_state_box_size.size() != this->box_size.size()) {
+        throw std::runtime_error("Disk::restore_state_impl: last_state_box_size is not initialized");
+    }
+    const int N = n_particles();
+    const int S = n_systems();
+    auto B = md::launch::threads_for();
+    auto G_N = md::launch::blocks_for(N);
+    auto G_S = md::launch::blocks_for(S);
+    CUDA_LAUNCH(kernels::restore_particle_state_kernel, G_N, B,
+        this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
+        this->rad.ptr(), this->last_state_rad.ptr(),
+        this->mass.ptr(), this->last_state_mass.ptr(),
+        flag.ptr(), true_val
+    );
+    CUDA_LAUNCH(kernels::restore_system_state_kernel, G_S, B,
+        this->box_size.xptr(), this->box_size.yptr(), this->last_state_box_size.xptr(), this->last_state_box_size.yptr(),
+        flag.ptr(), true_val
+    );
+    Base::sync_box();
+    Base::sync_class_constants();
+    Base::check_neighbors();
 }
 
 } // namespace md::disk

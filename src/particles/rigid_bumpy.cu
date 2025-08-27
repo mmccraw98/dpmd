@@ -408,6 +408,35 @@ __global__ void scale_velocities_kernel(
     vtheta[i] *= scale[sid];
 }
 
+__global__ void scale_positions_kernel(
+    double* __restrict__ x, double* __restrict__ y,
+    double* __restrict__ vertex_x, double* __restrict__ vertex_y,
+    const double* __restrict__ scale_factor
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = md::geo::g_sys.n_particles;
+    if (i >= N) return;
+
+    const int sid = md::geo::g_sys.id[i];
+
+    const int beg = md::poly::g_poly.particle_offset[i];
+    const int end = md::poly::g_poly.particle_offset[i+1];
+
+    double pos_x = x[i];
+    double pos_y = y[i];
+
+    double new_pos_x = pos_x * scale_factor[sid];
+    double new_pos_y = pos_y * scale_factor[sid];
+
+    x[i] = new_pos_x;
+    y[i] = new_pos_y;
+
+    for (int j = beg; j < end; j++) {
+        vertex_x[j] += (new_pos_x - pos_x);
+        vertex_y[j] += (new_pos_y - pos_y);
+    }
+}
+
 // Mix velocities and forces - system-level alpha, primarily used for FIRE
 __global__ void mix_velocities_and_forces_kernel(
     double* __restrict__ vx,
@@ -452,6 +481,114 @@ __global__ void mix_velocities_and_forces_kernel(
     vx[i] = vxi * (1 - a) + fxi * mixing_ratio;
     vy[i] = vyi * (1 - a) + fyi * mixing_ratio;
     vtheta[i] = vthetai * (1 - a) + torquei * torque_mixing_ratio;
+}
+
+
+__global__ void save_particle_state_kernel(
+    const double* __restrict__ pos_x, const double* __restrict__ pos_y, double* __restrict__ last_pos_x, double* __restrict__ last_pos_y,
+    const double* __restrict__ angle, double* __restrict__ last_angle,
+    const double* __restrict__ mass, double* __restrict__ last_mass,
+    const double* __restrict__ moment_inertia, double* __restrict__ last_moment_inertia,
+    const int* __restrict__ n_vertices_per_particle, int* __restrict__ last_n_vertices_per_particle,
+    const int* __restrict__ flag, const int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = md::geo::g_sys.n_particles;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    if (flag[sid] == true_val) {
+        last_pos_x[i] = pos_x[i];
+        last_pos_y[i] = pos_y[i];
+        last_angle[i] = angle[i];
+        last_mass[i] = mass[i];
+        last_moment_inertia[i] = moment_inertia[i];
+        last_n_vertices_per_particle[i] = n_vertices_per_particle[i];
+    }
+}
+
+__global__ void save_vertex_state_kernel(
+    const double* __restrict__ vertex_rad, double* __restrict__ last_vertex_rad,
+    const double* __restrict__ vertex_pos_x, const double* __restrict__ vertex_pos_y, double* __restrict__ last_vertex_pos_x, double* __restrict__ last_vertex_pos_y,
+    const int* __restrict__ vertex_particle_id, int* __restrict__ last_vertex_particle_id,
+    const int* __restrict__ flag, const int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int Nv = md::geo::g_sys.n_vertices;
+    if (i >= Nv) return;
+    const int v_sid = md::poly::g_vertex_sys.id[i];
+    if (flag[v_sid] == true_val) {
+        last_vertex_rad[i] = vertex_rad[i];
+        last_vertex_pos_x[i] = vertex_pos_x[i];
+        last_vertex_pos_y[i] = vertex_pos_y[i];
+        last_vertex_particle_id[i] = vertex_particle_id[i];
+    }
+}
+
+__global__ void save_system_state_kernel(
+    const double* __restrict__ box_size_x, const double* __restrict__ box_size_y, double* __restrict__ last_box_size_x, double* __restrict__ last_box_size_y,
+    const int* __restrict__ flag, const int true_val
+) {
+    const int sid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = md::geo::g_sys.n_systems;
+    if (sid >= S) return;
+    if (flag[sid] == true_val) {
+        last_box_size_x[sid] = box_size_x[sid];
+        last_box_size_y[sid] = box_size_y[sid];
+    }
+}
+
+__global__ void restore_particle_state_kernel(
+    double* __restrict__ pos_x, double* __restrict__ pos_y, const double* __restrict__ last_pos_x, const double* __restrict__ last_pos_y,
+    double* __restrict__ angle, const double* __restrict__ last_angle,
+    double* __restrict__ mass, const double* __restrict__ last_mass,
+    double* __restrict__ moment_inertia, const double* __restrict__ last_moment_inertia,
+    int* __restrict__ n_vertices_per_particle, const int* __restrict__ last_n_vertices_per_particle,
+    const int* __restrict__ flag, const int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = md::geo::g_sys.n_particles;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    if (flag[sid] == true_val) {
+        pos_x[i] = last_pos_x[i];
+        pos_y[i] = last_pos_y[i];
+        angle[i] = last_angle[i];
+        mass[i] = last_mass[i];
+        moment_inertia[i] = last_moment_inertia[i];
+        n_vertices_per_particle[i] = last_n_vertices_per_particle[i];
+    }
+}
+
+__global__ void restore_vertex_state_kernel(
+    double* __restrict__ vertex_rad, const double* __restrict__ last_vertex_rad,
+    double* __restrict__ vertex_pos_x, const double* __restrict__ last_vertex_pos_x,
+    double* __restrict__ vertex_pos_y, const double* __restrict__ last_vertex_pos_y,
+    int* __restrict__ vertex_particle_id, const int* __restrict__ last_vertex_particle_id,
+    const int* __restrict__ flag, const int true_val
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int Nv = md::geo::g_sys.n_vertices;
+    if (i >= Nv) return;
+    const int v_sid = md::poly::g_vertex_sys.id[i]; 
+    if (flag[v_sid] == true_val) {
+        vertex_rad[i] = last_vertex_rad[i];
+        vertex_pos_x[i] = last_vertex_pos_x[i];
+        vertex_pos_y[i] = last_vertex_pos_y[i];
+        vertex_particle_id[i] = last_vertex_particle_id[i];
+    }
+}
+
+__global__ void restore_system_state_kernel(
+    double* __restrict__ box_size_x, double* __restrict__ box_size_y, const double* __restrict__ last_box_size_x, const double* __restrict__ last_box_size_y,
+    const int* __restrict__ flag, const int true_val
+) {
+    const int sid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = md::geo::g_sys.n_systems;
+    if (sid >= S) return;
+    if (flag[sid] == true_val) {
+        box_size_x[sid] = last_box_size_x[sid];
+        box_size_y[sid] = last_box_size_y[sid];
+    }
 }
 
 
@@ -530,6 +667,14 @@ void RigidBumpy::scale_velocities_impl(df::DeviceField1D<double> scale) {
     auto G = md::launch::blocks_for(N);
     CUDA_LAUNCH(kernels::scale_velocities_kernel, G, B,
         this->vel.xptr(), this->vel.yptr(), this->angular_vel.ptr(), scale.ptr());
+}
+
+void RigidBumpy::scale_positions_impl(df::DeviceField1D<double> scale) {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::scale_positions_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(), this->vertex_pos.xptr(), this->vertex_pos.yptr(), scale.ptr());
 }
 
 void RigidBumpy::mix_velocities_and_forces_impl(df::DeviceField1D<double> alpha) {
@@ -649,5 +794,139 @@ void RigidBumpy::compute_fpower_total_impl() {
         this->system_offset.ptr() + 1,
         stream);
 }
+
+void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
+    if (this->last_state_pos.size() != this->pos.size()) {
+        this->last_state_pos.resize(this->pos.size());
+    }
+    if (this->last_state_angle.size() != this->angle.size()) {
+        this->last_state_angle.resize(this->angle.size());
+    }
+    if (this->last_state_mass.size() != this->mass.size()) {
+        this->last_state_mass.resize(this->mass.size());
+    }
+    if (this->last_state_moment_inertia.size() != this->moment_inertia.size()) {
+        this->last_state_moment_inertia.resize(this->moment_inertia.size());
+    }
+    if (this->last_state_vertex_rad.size() != this->vertex_rad.size()) {
+        this->last_state_vertex_rad.resize(this->vertex_rad.size());
+    }
+    if (this->last_state_vertex_pos.size() != this->vertex_pos.size()) {
+        this->last_state_vertex_pos.resize(this->vertex_pos.size());
+    }
+    if (this->last_state_vertex_particle_id.size() != this->vertex_particle_id.size()) {
+        this->last_state_vertex_particle_id.resize(this->vertex_particle_id.size());
+    }
+    if (this->last_state_box_size.size() != this->box_size.size()) {
+        this->last_state_box_size.resize(this->box_size.size());
+    }
+    if (this->last_state_n_vertices_per_particle.size() != this->n_vertices_per_particle.size()) {
+        this->last_state_n_vertices_per_particle.resize(this->n_vertices_per_particle.size());
+    }
+    
+    const int N = n_particles();
+    const int V = n_vertices();
+    const int S = n_systems();
+    auto B = md::launch::threads_for();
+    auto G_N = md::launch::blocks_for(N);
+    auto G_S = md::launch::blocks_for(S);
+    auto G_V = md::launch::blocks_for(V);
+    CUDA_LAUNCH(kernels::save_particle_state_kernel, G_N, B,
+        this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
+        this->angle.ptr(), this->last_state_angle.ptr(),
+        this->mass.ptr(), this->last_state_mass.ptr(),
+        this->moment_inertia.ptr(), this->last_state_moment_inertia.ptr(),
+        this->n_vertices_per_particle.ptr(), this->last_state_n_vertices_per_particle.ptr(),
+        flag.ptr(), true_val);
+    CUDA_LAUNCH(kernels::save_vertex_state_kernel, G_V, B,
+        this->vertex_rad.ptr(), this->last_state_vertex_rad.ptr(),
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(), this->last_state_vertex_pos.xptr(), this->last_state_vertex_pos.yptr(),
+        this->vertex_particle_id.ptr(), this->last_state_vertex_particle_id.ptr(),
+        flag.ptr(), true_val);
+
+    CUDA_LAUNCH(kernels::save_system_state_kernel, G_S, B,
+        this->box_size.xptr(), this->box_size.yptr(), this->last_state_box_size.xptr(), this->last_state_box_size.yptr(),
+        flag.ptr(), true_val);
+    
+}
+
+void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
+    if (this->last_state_pos.size() != this->pos.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_pos is not initialized");
+    }
+    if (this->last_state_angle.size() != this->angle.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_angle is not initialized");
+    }
+    if (this->last_state_mass.size() != this->mass.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_mass is not initialized");
+    }
+    if (this->last_state_moment_inertia.size() != this->moment_inertia.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_moment_inertia is not initialized");
+    }
+    if (this->last_state_vertex_rad.size() != this->vertex_rad.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_vertex_rad is not initialized");
+    }
+    if (this->last_state_vertex_pos.size() != this->vertex_pos.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_vertex_pos is not initialized");
+    }
+    if (this->last_state_vertex_particle_id.size() != this->vertex_particle_id.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_vertex_particle_id is not initialized");
+    }
+    if (this->last_state_box_size.size() != this->box_size.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_box_size is not initialized");
+    }
+    if (this->last_state_n_vertices_per_particle.size() != this->n_vertices_per_particle.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_n_vertices_per_particle is not initialized");
+    }
+
+    const int N = n_particles();
+    const int V = n_vertices();
+    const int S = n_systems();
+    auto B = md::launch::threads_for();
+    auto G_N = md::launch::blocks_for(N);
+    auto G_S = md::launch::blocks_for(S);
+    auto G_V = md::launch::blocks_for(V);
+    CUDA_LAUNCH(kernels::restore_particle_state_kernel, G_N, B,
+        this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
+        this->angle.ptr(), this->last_state_angle.ptr(),
+        this->mass.ptr(), this->last_state_mass.ptr(),
+        this->moment_inertia.ptr(), this->last_state_moment_inertia.ptr(),
+        this->n_vertices_per_particle.ptr(), this->last_state_n_vertices_per_particle.ptr(),
+        flag.ptr(), true_val);
+    CUDA_LAUNCH(kernels::restore_vertex_state_kernel, G_V, B,
+        this->vertex_rad.ptr(), this->last_state_vertex_rad.ptr(),
+        this->vertex_pos.xptr(), this->last_state_vertex_pos.xptr(),
+        this->vertex_pos.yptr(), this->last_state_vertex_pos.yptr(),
+        this->vertex_particle_id.ptr(), this->last_state_vertex_particle_id.ptr(),
+        flag.ptr(), true_val);
+    CUDA_LAUNCH(kernels::restore_system_state_kernel, G_S, B,
+        this->box_size.xptr(), this->box_size.yptr(), this->last_state_box_size.xptr(), this->last_state_box_size.yptr(),
+        flag.ptr(), true_val);
+
+    // recalculate particle offset using an exclusive scan of n_vertices_per_particle
+    thrust::exclusive_scan(
+        thrust::device,
+        this->n_vertices_per_particle.ptr(),
+        this->n_vertices_per_particle.ptr() + N,
+        this->particle_offset.ptr()
+    );
+
+    // sync vertex system constants
+    Base::sync_box();
+    Base::sync_class_constants();
+    Base::check_neighbors();
+}
+
+    df::DeviceField2D<double> last_state_pos;
+    df::DeviceField1D<double> last_state_angle;
+    df::DeviceField1D<double> last_state_mass;
+    df::DeviceField1D<int> last_state_n_vertices_per_particle;
+    df::DeviceField1D<double> last_state_moment_inertia;
+    
+    df::DeviceField1D<double> last_state_vertex_rad;
+    df::DeviceField2D<double> last_state_vertex_pos;
+    df::DeviceField1D<int> last_state_vertex_particle_id;
+    
+    df::DeviceField2D<double> last_state_box_size;
 
 } // namespace md::rigid_bumpy

@@ -70,8 +70,13 @@ set(CORE_UTILS_SOURCES
     src/utils/device_fields.cu
 )
 
+set(CORE_ROUTINES_SOURCES
+    src/routines/minimizers.cu
+    src/routines/jammers.cu
+)
+
 # Create core library
-add_library(dpmd_core ${CORE_KERNEL_SOURCES} ${CORE_PARTICLE_SOURCES} ${CORE_INTEGRATOR_SOURCES} ${CORE_UTILS_SOURCES})
+add_library(dpmd_core ${CORE_KERNEL_SOURCES} ${CORE_PARTICLE_SOURCES} ${CORE_INTEGRATOR_SOURCES} ${CORE_UTILS_SOURCES} ${CORE_ROUTINES_SOURCES})
 
 # Link libraries to core
 target_link_libraries(dpmd_core ${HDF5_LIBRARIES})
@@ -96,6 +101,11 @@ set(TEST_SOURCES
     tests/damped_jam_rigid_bumpy.cu
     tests/nve_disk_pbc.cu
     tests/nve_disk_wall.cu
+    tests/fire_disk_pbc.cu
+    tests/fire_disk_wall.cu
+    tests/fire_jam_disk_pbc.cu
+    tests/fire_jam_disk_wall.cu
+    tests/fire_jam_rigid_bumpy.cu
 )
 
 # Create test executables

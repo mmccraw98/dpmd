@@ -51,12 +51,7 @@ public:
         dt.fill(dt_init);
         define_arrays();
     }
-    BaseFIRE(ParticleT& p, df::DeviceField1D<double> dt_init) : Base(p) {
-        dt.resize(p.n_systems());
-        if (dt_init.size() != p.n_systems()) {
-            throw std::invalid_argument("BaseFIRE: dt_init must have the same size as the number of systems");
-        }
-        dt.copy_from(dt_init);
+    BaseFIRE(ParticleT& p, df::DeviceField1D<double> dt_init) : Base(p), dt(dt_init) {
         define_arrays();
     }
 
@@ -111,6 +106,10 @@ public:
         );
         // if the sum of dt is 0, all systems are converged
         return thrust::reduce(thrust::device, dt.ptr(), dt.ptr() + P.n_systems(), 0.0) == 0.0;
+    }
+
+    df::DeviceField1D<double> get_dt() {
+        return dt;
     }
 
 protected:

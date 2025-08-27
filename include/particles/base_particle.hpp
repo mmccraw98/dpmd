@@ -229,6 +229,16 @@ public:
     // Scale the velocities of the particles
     void scale_velocities(df::DeviceField1D<double> scale) { derived().scale_velocities_impl(scale); }
 
+    // Scale the velocities of the particles uniformly
+    void scale_velocities(double scale) {
+        const int S = n_systems();
+        df::DeviceField1D<double> scale_df; scale_df.resize(S); scale_df.fill(scale);
+        scale_velocities(scale_df);
+    }
+
+    // Scale the positions of the particles
+    void scale_positions(df::DeviceField1D<double> scale) { derived().scale_positions_impl(scale); }
+
     // Compute the kinetic energy of each particle
     void compute_ke() { derived().compute_ke_impl(); }
 
@@ -396,6 +406,7 @@ public:
         return area_total;
     }
 
+    // Compute the packing fraction of each system
     void compute_packing_fraction() {
         const int N = n_particles();
         const int S = n_systems();
@@ -443,8 +454,30 @@ public:
             stream);
     }
 
+    // Compute the total power of each system (used for the FIRE algorithm)
     void compute_fpower_total() { derived().compute_fpower_total_impl(); }
 
+    // Save current state using a flag array (true_val == save, otherwise don't save)
+    void save_state(df::DeviceField1D<int> flag, int true_val) { derived().save_state_impl(flag, true_val); }
+
+    // Save current state
+    void save_state() {
+        const int N = n_particles();
+        const int true_val = 1;
+        df::DeviceField1D<int> flag; flag.resize(N); flag.fill(true_val);
+        save_state(flag, true_val);
+    }
+
+    // Restore to last saved state using a flag array (true_val == restore, otherwise don't restore)
+    void restore_state(df::DeviceField1D<int> flag, int true_val) { derived().restore_state_impl(flag, true_val); }
+
+    // Restore to last saved state
+    void restore_state() {
+        const int N = n_particles();
+        const int true_val = 1;
+        df::DeviceField1D<int> flag; flag.resize(N); flag.fill(true_val);
+        restore_state(flag, true_val);
+    }
 
 protected:
     Derived&       derived()       { return static_cast<Derived&>(*this); }
@@ -475,6 +508,8 @@ protected:
     int n_vertices_impl() const { return 0; }
     void set_random_positions_impl(double, double) {}
     void compute_fpower_total_impl() {}
+    void save_state_impl(df::DeviceField1D<int>, int) {}
+    void restore_state_impl(df::DeviceField1D<int>, int) {}
 private:
     int _n_cells;
 };
