@@ -298,7 +298,7 @@ __global__ void compute_particle_forces_kernel(
         pei += vertex_pe[j];
         dx = vx[j] - px_i;
         dy = vy[j] - py_i;
-        tqi += vertex_force_x_i * dy - vertex_force_y_i * dx;
+        tqi += vertex_force_y_i * dx - vertex_force_x_i * dy;
     }
 
     force_x[i] = fxi;
