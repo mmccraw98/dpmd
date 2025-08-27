@@ -353,8 +353,8 @@ int main() {
         P.sync_class_constants();
         P.init_neighbors();
 
-        std::vector<double> dts_to_test = {1e-1, 1e-2, 1e-3};
-        std::vector<int> n_steps_to_test = {1000, 10000, 100000};
+        std::vector<double> dts_to_test = {1e-1, 5e-2, 1e-2, 5e-3, 1e-3};
+        std::vector<int> n_steps_to_test = {1000, 5000, 10000, 50000, 100000};
         std::vector<double> energy_fluctuations(dts_to_test.size());
         std::vector<double> relstd; relstd.reserve(dts_to_test.size());
         for (int i = 0; i < static_cast<int>(dts_to_test.size()); i++) {
@@ -428,8 +428,8 @@ int main() {
         P.sync_class_constants();
         P.init_neighbors();
 
-        std::vector<double> dts_to_test = {1e-1, 1e-2, 1e-3};
-        std::vector<int> n_steps_to_test = {1000, 10000, 100000};
+        std::vector<double> dts_to_test = {1e-1, 5e-2, 1e-2, 5e-3, 1e-3};
+        std::vector<int> n_steps_to_test = {1000, 5000, 10000, 50000, 100000};
         std::vector<double> energy_fluctuations(dts_to_test.size());
         std::vector<double> relstd; relstd.reserve(dts_to_test.size());
         for (int i = 0; i < static_cast<int>(dts_to_test.size()); i++) {
@@ -504,8 +504,8 @@ int main() {
         P.sync_class_constants();
         P.init_neighbors();
 
-        std::vector<double> dts_to_test = {1e-1, 1e-2, 1e-3};
-        std::vector<int> n_steps_to_test = {1000, 10000, 100000};
+        std::vector<double> dts_to_test = {1e-1, 5e-2, 1e-2, 5e-3, 1e-3};
+        std::vector<int> n_steps_to_test = {1000, 5000, 10000, 50000, 100000};
         std::vector<double> energy_fluctuations(dts_to_test.size());
         std::vector<double> relstd; relstd.reserve(dts_to_test.size());
         for (int i = 0; i < static_cast<int>(dts_to_test.size()); i++) {
@@ -579,8 +579,8 @@ int main() {
         P.sync_class_constants();
         P.init_neighbors();
 
-        std::vector<double> dts_to_test = {1e-1, 1e-2, 1e-3};
-        std::vector<int> n_steps_to_test = {1000, 10000, 100000};
+        std::vector<double> dts_to_test = {1e-1, 5e-2, 1e-2, 5e-3, 1e-3};
+        std::vector<int> n_steps_to_test = {1000, 5000, 10000, 50000, 100000};
         std::vector<double> energy_fluctuations(dts_to_test.size());
         std::vector<double> relstd; relstd.reserve(dts_to_test.size());
         for (int i = 0; i < static_cast<int>(dts_to_test.size()); i++) {
