@@ -1,10 +1,11 @@
-// TODO: test the jamming code using disks
-// TODO: add tests for rigid bumpy dynamics
 // TODO: add box resizing
+// TODO: remove redundancy in the packing fraction box resizing calculations
+// TODO: add overrides to system level operations for uniform operation (i.e. passing a single scalar dt instead of an array)
 // TODO: implement cell list for rigid bumpy particles
+// TODO: implement all remaining unimplemented functions in rigid bumpy
 // TODO: add remaining integrators from dpcuda2
 // TODO: remove vertex mass from rigid bumpy
-// TODO: remove redundancies in the jamming and minimizing code
+// TODO: remove redundancies in the jamming and minimizing code - try to merge the different functions
 // TODO: improve the set/restore last state code
 // TODO: verify that the set/restore last state code works with cell lists
 // TODO: verify that the box resizing code works with cell lists

@@ -134,7 +134,7 @@ void jam_binary_search_pbc(
         P.scale_positions(scale_factor);
 
         // check if the sum of abs(action) is 0, we are done
-        int sum_abs_action = thrust::transform_reduce(thrust::device, action.ptr(), action.ptr() + S, kernels::functor_abs_val(), 0, thrust::plus<int>());
+        double sum_abs_action = thrust::transform_reduce(thrust::device, action.ptr(), action.ptr() + S, kernels::functor_abs_val(), 0.0, thrust::plus<double>());
         double avg_phi = thrust::reduce(thrust::device, phi.ptr(), phi.ptr() + S, 0.0, thrust::plus<double>()) / S;
         double avg_action = thrust::reduce(thrust::device, action.ptr(), action.ptr() + S, 0.0, thrust::plus<double>()) / S;
         double avg_pe = thrust::reduce(thrust::device, P.pe_total.ptr(), P.pe_total.ptr() + S, 0.0, thrust::plus<double>()) / S;
@@ -230,7 +230,7 @@ void jam_binary_search_wall(
         P.scale_positions(scale_factor);
 
         // check if the sum of abs(action) is 0, we are done
-        int sum_abs_action = thrust::transform_reduce(thrust::device, action.ptr(), action.ptr() + S, kernels::functor_abs_val(), 0, thrust::plus<int>());
+        double sum_abs_action = thrust::transform_reduce(thrust::device, action.ptr(), action.ptr() + S, kernels::functor_abs_val(), 0.0, thrust::plus<double>());
         double avg_phi = thrust::reduce(thrust::device, phi.ptr(), phi.ptr() + S, 0.0, thrust::plus<double>()) / S;
         double avg_action = thrust::reduce(thrust::device, action.ptr(), action.ptr() + S, 0.0, thrust::plus<double>()) / S;
         double avg_pe = thrust::reduce(thrust::device, P.pe_total.ptr(), P.pe_total.ptr() + S, 0.0, thrust::plus<double>()) / S;

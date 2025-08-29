@@ -108,6 +108,7 @@ set(TEST_SOURCES
     tests/fire_jam_rigid_bumpy.cu
     tests/nve_rigid_bumpy_pbc.cu
     tests/nve_rigid_bumpy_wall.cu
+    tests/scale_phi_nve_rigid_bumpy_wall.cu
     tests/fire_rigid_bumpy_pbc.cu
     tests/fire_rigid_bumpy_wall.cu
     tests/fire_jam_rigid_bumpy_wall.cu
