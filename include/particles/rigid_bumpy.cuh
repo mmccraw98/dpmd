@@ -99,6 +99,10 @@ public:
 
     void restore_state_impl(df::DeviceField1D<int> flag, int true_val);
 
+    void load_static_from_hdf5_poly_extras_impl(hid_t group);
+
+    void load_from_hdf5_poly_extras_impl(hid_t group);
+
 private:
     df::DeviceField2D<double> last_state_pos;
     df::DeviceField1D<double> last_state_angle;

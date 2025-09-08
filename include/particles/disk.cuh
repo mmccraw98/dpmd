@@ -102,6 +102,12 @@ public:
     // Restore the last saved state of the system
     void restore_state_impl(df::DeviceField1D<int> flag, int true_val);
 
+    // Load static data from hdf5 group and initialize the particle
+    void load_static_from_hdf5_point_extras_impl(hid_t group);
+
+    // Load from hdf5 group and initialize the particle
+    void load_from_hdf5_point_extras_impl(hid_t group);
+
 private:
     df::DeviceField2D<double> last_state_pos;
     df::DeviceField1D<double> last_state_rad;

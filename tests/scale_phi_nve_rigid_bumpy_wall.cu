@@ -183,8 +183,6 @@ int main(int argc, char** argv) {
         vvw.step();
     }
 
-
-
     // jam the final configurations
     md::routines::jam_binary_search_wall(P, dt, 1e4, n_fire_steps, avg_pe_target, avg_pe_diff_target, phi_increment, phi_tolerance);
 

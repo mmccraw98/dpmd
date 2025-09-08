@@ -917,16 +917,30 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     Base::check_neighbors();
 }
 
-    df::DeviceField2D<double> last_state_pos;
-    df::DeviceField1D<double> last_state_angle;
-    df::DeviceField1D<double> last_state_mass;
-    df::DeviceField1D<int> last_state_n_vertices_per_particle;
-    df::DeviceField1D<double> last_state_moment_inertia;
-    
-    df::DeviceField1D<double> last_state_vertex_rad;
-    df::DeviceField2D<double> last_state_vertex_pos;
-    df::DeviceField1D<int> last_state_vertex_particle_id;
-    
-    df::DeviceField2D<double> last_state_box_size;
+void RigidBumpy::load_static_from_hdf5_poly_extras_impl(hid_t group) {
+    this->mass.from_host(read_vector<double>(group, "mass"));
+    this->moment_inertia.from_host(read_vector<double>(group, "moment_inertia"));
+}
+
+void RigidBumpy::load_from_hdf5_poly_extras_impl(hid_t group) {
+    this->angle.from_host(read_vector<double>(group, "angle"));
+    this->pos.from_host(read_vector_2d<double>(group, "pos"));
+    this->vel.fill(0.0, 0.0);
+    if (h5_link_exists(group, "vel")) {
+        this->vel.from_host(read_vector_2d<double>(group, "vel"));
+    }
+    this->force.fill(0.0, 0.0);
+    if (h5_link_exists(group, "force")) {
+        this->force.from_host(read_vector_2d<double>(group, "force"));
+    }
+    this->torque.fill(0.0);
+    if (h5_link_exists(group, "torque")) {
+        this->torque.from_host(read_vector<double>(group, "torque"));
+    }
+    this->angular_vel.fill(0.0);
+    if (h5_link_exists(group, "angular_vel")) {
+        this->angular_vel.from_host(read_vector<double>(group, "angular_vel"));
+    }
+}
 
 } // namespace md::rigid_bumpy

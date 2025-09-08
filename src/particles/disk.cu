@@ -704,4 +704,13 @@ void Disk::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     Base::check_neighbors();
 }
 
+void Disk::load_static_from_hdf5_point_extras_impl(hid_t group) {
+    // nothing to do
+}
+
+void Disk::load_from_hdf5_point_extras_impl(hid_t group) {
+    // nothing to do
+}
+
+
 } // namespace md::disk

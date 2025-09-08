@@ -1,6 +1,7 @@
 #pragma once
 #include "particles/base_particle.hpp"
 #include "utils/cuda_utils.cuh"
+#include "utils/h5_io.hpp"
 #include "kernels/base_point_particle_kernels.cuh"
 #include <cub/device/device_segmented_reduce.cuh>
 #include <thrust/binary_search.h>
@@ -31,6 +32,18 @@ struct has_enable_point_swap_extras_impl : std::false_type {};
 template<class T>
 struct has_enable_point_swap_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().enable_point_swap_extras_impl(false))>> : std::true_type {};
+
+template<class T, class = void>
+struct has_load_static_from_hdf5_point_extras_impl : std::false_type {};
+template<class T>
+struct has_load_static_from_hdf5_point_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().load_static_from_hdf5_point_extras_impl(std::declval<hid_t>()))>> : std::true_type {};
+
+template<class T, class = void>
+struct has_load_from_hdf5_point_extras_impl : std::false_type {};
+template<class T>
+struct has_load_from_hdf5_point_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().load_from_hdf5_point_extras_impl(std::declval<hid_t>()))>> : std::true_type {};
 
 namespace md {
 
@@ -148,6 +161,28 @@ public:
         this->neighbor_ids.resize(total_neighbors);
         // 6) create the neighbor list, again enumerating over the 9-cell stencil
         this->_fill_cell_neighbors();
+    }
+
+    // Load static data from hdf5 group and initialize the particle
+    void load_static_from_hdf5_point_extras_impl(hid_t group) {
+        this->e_interaction.from_host(read_vector<double>(group, "e_interaction"));
+        this->mass.from_host(read_vector<double>(group, "mass"));
+        this->rad.from_host(read_vector<double>(group, "rad"));
+        if constexpr (has_load_static_from_hdf5_point_extras_impl<Derived>::value)
+            this->derived().load_static_from_hdf5_point_extras_impl(group);
+    }
+
+    // Load from hdf5 group and initialize the particle
+    void load_from_hdf5_point_extras_impl(hid_t group) {
+        this->pos.from_host(read_vector_2d<double>(group, "pos"));  // required so not wrapped in a H5Aexists check
+        if (h5_link_exists(group, "vel")) {
+            this->vel.from_host(read_vector_2d<double>(group, "vel"));
+        }
+        if (h5_link_exists(group, "force")) {
+            this->force.from_host(read_vector_2d<double>(group, "force"));
+        }
+        if constexpr (has_load_from_hdf5_point_extras_impl<Derived>::value)
+            this->derived().load_from_hdf5_point_extras_impl(group);
     }
 
 

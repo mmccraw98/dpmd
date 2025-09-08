@@ -553,6 +553,9 @@ struct DeviceField2D {
     // Copy data from host to device
     void from_host(const std::vector<T>& hx, const std::vector<T>& hy) { x.from_host(hx); y.from_host(hy); }
 
+    // Copy data from host to device - overload to accept std::pair
+    void from_host(const std::pair<std::vector<T>, std::vector<T>>& h) { from_host(h.first, h.second); }
+
     // Fill both axes with set values
     void fill(T vx, T vy){ x.fill(vx); y.fill(vy); }
 

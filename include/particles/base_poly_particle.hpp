@@ -1,5 +1,6 @@
 #pragma once
 #include "particles/base_particle.hpp"
+#include "utils/h5_io.hpp"
 #include "utils/cuda_utils.cuh"
 #include "kernels/base_poly_particle_kernels.cuh"
 #include <cub/device/device_segmented_reduce.cuh>
@@ -43,6 +44,18 @@ struct has_sync_class_constants_poly_extras_impl : std::false_type {};
 template<class T>
 struct has_sync_class_constants_poly_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().sync_class_constants_poly_extras_impl())>> : std::true_type {};
+
+template<class T, class = void>
+struct has_load_static_from_hdf5_poly_extras_impl : std::false_type {};
+template<class T>
+struct has_load_static_from_hdf5_poly_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().load_static_from_hdf5_poly_extras_impl(std::declval<hid_t>()))>> : std::true_type {};
+
+template<class T, class = void>
+struct has_load_from_hdf5_poly_extras_impl : std::false_type {};
+template<class T>
+struct has_load_from_hdf5_poly_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().load_from_hdf5_poly_extras_impl(std::declval<hid_t>()))>> : std::true_type {};
 
 namespace md {
 
@@ -186,6 +199,40 @@ public:
     // Return total number of vertices
     int n_vertices_impl() const {
         return this->vertex_pos.size();
+    }
+
+    // Load static data from hdf5 group and initialize the particle
+    void load_static_from_hdf5_poly_extras_impl(hid_t group) {
+        this->e_interaction.from_host(read_vector<double>(group, "e_interaction"));
+        this->vertex_mass.from_host(read_vector<double>(group, "vertex_mass"));
+        this->vertex_rad.from_host(read_vector<double>(group, "vertex_rad"));
+        this->n_vertices_per_particle.from_host(read_vector<int>(group, "n_vertices_per_particle"));
+        this->particle_offset.from_host(read_vector<int>(group, "particle_offset"));
+        this->vertex_particle_id.from_host(read_vector<int>(group, "vertex_particle_id"));
+        this->vertex_system_id.from_host(read_vector<int>(group, "vertex_system_id"));
+        this->vertex_system_offset.from_host(read_vector<int>(group, "vertex_system_offset"));
+        this->vertex_system_size.from_host(read_vector<int>(group, "vertex_system_size"));
+        if constexpr (has_load_static_from_hdf5_poly_extras_impl<Derived>::value)
+            this->derived().load_static_from_hdf5_poly_extras_impl(group);
+    }
+
+    // Load from hdf5 group and initialize the particle
+    void load_from_hdf5_poly_extras_impl(hid_t group) {
+        this->vertex_pos.from_host(read_vector_2d<double>(group, "vertex_pos"));
+        this->vertex_vel.fill(0.0, 0.0);
+        if (h5_link_exists(group, "vertex_vel")) {
+            this->vertex_vel.from_host(read_vector_2d<double>(group, "vertex_vel"));
+        }
+        this->vertex_force.fill(0.0, 0.0);
+        if (h5_link_exists(group, "vertex_force")) {
+            this->vertex_force.from_host(read_vector_2d<double>(group, "vertex_force"));
+        }
+        this->vertex_pe.fill(0.0);
+        if (h5_link_exists(group, "vertex_pe")) {
+            this->vertex_pe.from_host(read_vector<double>(group, "vertex_pe"));
+        }
+        if constexpr (has_load_from_hdf5_poly_extras_impl<Derived>::value)
+            this->derived().load_from_hdf5_poly_extras_impl(group);
     }
 
 private:

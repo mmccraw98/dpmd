@@ -1,5 +1,6 @@
 #pragma once
 #include "utils/device_fields.cuh"
+#include "utils/h5_io.hpp"
 #include "kernels/base_particle_kernels.cuh"
 #include "utils/cuda_utils.cuh"
 #include <thrust/device_vector.h>
@@ -43,6 +44,8 @@ public:
     df::DeviceField2D<double> cell_inv;          // (S,2) [1/Lx,1/Ly] - inverse of the cell size for each system
     df::DeviceField2D<int>    cell_dim;          // (S,2) [Nx,Ny] - number of cells in each dimension for each system
     df::DeviceField1D<int>    cell_system_start; // (S+1,) - starting index of the cells for each system in the cell_ids list
+    df::DeviceField1D<double> verlet_skin;       // (S,) - verlet skin for each system
+    df::DeviceField1D<double> thresh2;           // (S,) - threshold squared for each system for neighbor list rebuild
 
 
     // System fields
@@ -56,8 +59,6 @@ public:
     df::DeviceField2D<double> box_inv;           // (S,2) [1/Lx,1/Ly] - inverse of the box size for each system
     
     // System constants
-    df::DeviceField1D<double> verlet_skin;       // (S,) - verlet skin for each system
-    df::DeviceField1D<double> thresh2;           // (S,) - threshold squared for each system for neighbor list rebuild
     df::DeviceField1D<double> packing_fraction;  // (S,) - packing fraction for each system
     df::DeviceField1D<double> pressure;          // (S,) - pressure for each system
     df::DeviceField1D<double> temperature;       // (S,) - temperature for each system
@@ -67,6 +68,143 @@ public:
 
     // Neighbor method
     NeighborMethod neighbor_method = NeighborMethod::Naive;
+
+    NeighborMethod get_neighbor_method() const { return neighbor_method; }
+
+    // Load from hdf5
+    void load_from_hdf5(std::string meta_path, std::string location) {
+        // open the meta file
+        hid_t meta_file = H5Fopen(meta_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+        if (meta_file < 0) {
+            throw std::runtime_error("BaseParticle::load_from_hdf5: failed to open meta file: " + meta_path);
+        }
+        
+        // load static
+        hid_t static_group = H5Gopen(meta_file, "static", H5P_DEFAULT);
+        load_static_from_hdf5_group(static_group);  // load everything that is required
+        load_from_hdf5_group(static_group);  // load everything that is not required
+        H5Gclose(static_group);
+        
+        // location: init, final, restart
+        if (location == "init") {
+            hid_t init_group = H5Gopen(meta_file, "init", H5P_DEFAULT);
+            load_from_hdf5_group(init_group);
+            H5Gclose(init_group);
+        } else if (location == "final") {
+            hid_t final_group = H5Gopen(meta_file, "final", H5P_DEFAULT);
+            load_from_hdf5_group(final_group);
+            H5Gclose(final_group);
+        } else if (location == "restart") {
+            hid_t restart_group = H5Gopen(meta_file, "restart", H5P_DEFAULT);
+            load_from_hdf5_group(restart_group);
+            H5Gclose(restart_group);
+        } else {
+            throw std::runtime_error("BaseParticle::load_from_hdf5: invalid location");
+        }
+        H5Fclose(meta_file);
+
+        sync_box();
+        sync_system();
+        sync_neighbors();
+        sync_cells();
+        sync_class_constants();
+        init_neighbors();
+    }
+
+    // Load static data and initialize the particle using a specified group from the hdf5 file
+    // Load everything that is strictly required to define thet particle
+    // note: if any of these are not present, there will be errors by design
+    void load_static_from_hdf5_group(hid_t group) {
+        const int S = read_scalar<int>(group, "n_systems");
+        const int N = read_scalar<int>(group, "n_particles");
+        const int Nv = read_scalar<int>(group, "n_vertices");
+        const std::string neighbor_method_str = read_scalar<std::string>(group, "neighbor_method");
+        if (neighbor_method_str == "naive") {
+            set_neighbor_method(NeighborMethod::Naive);
+        } else if (neighbor_method_str == "cell") {
+            set_neighbor_method(NeighborMethod::Cell);
+        } else {
+            throw std::runtime_error("BaseParticle::load_static_from_hdf5_group: invalid neighbor method");
+        }
+        allocate_systems(S);
+        allocate_particles(N);
+        allocate_vertices(Nv);
+        set_neighbor_method(neighbor_method);
+
+        // system data
+        system_id.from_host(read_vector<int>(group, "system_id"));
+        system_size.from_host(read_vector<int>(group, "system_size"));
+        system_offset.from_host(read_vector<int>(group, "system_offset"));
+        box_size.from_host(read_vector_2d<double>(group, "box_size"));
+
+        // load cell list data
+        if (get_neighbor_method() == NeighborMethod::Cell) {
+            cell_size.from_host(read_vector_2d<double>(group, "cell_size"));
+            cell_dim.from_host(read_vector_2d<int>(group, "cell_dim"));
+            cell_system_start.from_host(read_vector<int>(group, "cell_system_start"));
+            verlet_skin.from_host(read_vector<double>(group, "verlet_skin"));
+            thresh2.from_host(read_vector<double>(group, "thresh2"));
+        }
+
+        // run the impl for class-specific static loading
+        derived().load_static_from_hdf5_group_impl(group);
+    }
+
+    // Load from group within hdf5
+    // Load everything that is NOT strictly required to define the particle
+    // note: though these arent required, they still may cause errors if not loaded
+    // note: pos, vel, force are loaded in the sub-classes since not all particles have them (i.e. DPM)
+    // note: state variables (like pos) that are essentially required, are loaded outside of if-exists checks to force them to be loaded
+    void load_from_hdf5_group(hid_t group) {
+        if (h5_link_exists(group, "box_size")) {  // if the box size has been changed, load it again
+            box_size.from_host(read_vector_2d<double>(group, "box_size"));
+        }
+        if (h5_link_exists(group, "cell_size")) {  // if the cell size has been changed, load it again
+            cell_size.from_host(read_vector_2d<double>(group, "cell_size"));
+        }
+        if (h5_link_exists(group, "cell_dim")) {  // if the cell dim has been changed, load it again
+            cell_dim.from_host(read_vector_2d<int>(group, "cell_dim"));
+        }
+        if 
+        this->packing_fraction.fill(0.0);
+        if (h5_link_exists(group, "packing_fraction")) {
+            packing_fraction.from_host(read_vector<double>(group, "packing_fraction"));
+        }
+        this->pressure.fill(0.0);
+        if (h5_link_exists(group, "pressure")) {
+            pressure.from_host(read_vector<double>(group, "pressure"));
+        }
+        this->temperature.fill(0.0);
+        if (h5_link_exists(group, "temperature")) {
+            temperature.from_host(read_vector<double>(group, "temperature"));
+        }
+        this->area.fill(0.0);
+        if (h5_link_exists(group, "area")) {
+            area.from_host(read_vector<double>(group, "area"));
+        }
+        this->pe.fill(0.0);
+        if (h5_link_exists(group, "pe")) {
+            pe.from_host(read_vector<double>(group, "pe"));
+        }
+        this->ke.fill(0.0);
+        if (h5_link_exists(group, "ke")) {
+            ke.from_host(read_vector<double>(group, "ke"));
+        }
+        this->pe_total.fill(0.0);
+        if (h5_link_exists(group, "pe_total")) {
+            pe_total.from_host(read_vector<double>(group, "pe_total"));
+        }
+        this->ke_total.fill(0.0);
+        if (h5_link_exists(group, "ke_total")) {
+            ke_total.from_host(read_vector<double>(group, "ke_total"));
+        }
+        this->fpower_total.fill(0.0);
+        if (h5_link_exists(group, "fpower_total")) {
+            fpower_total.from_host(read_vector<double>(group, "fpower_total"));
+        }
+        // run the impl for class-specific loading
+        derived().load_from_hdf5_group_impl(group);
+    }
 
     // Set neighbor method to one of the enum values
     void set_neighbor_method(NeighborMethod method) {
@@ -510,6 +648,8 @@ protected:
     void compute_fpower_total_impl() {}
     void save_state_impl(df::DeviceField1D<int>, int) {}
     void restore_state_impl(df::DeviceField1D<int>, int) {}
+    void load_from_hdf5_group_impl(hid_t) {}
+    void load_static_from_hdf5_group_impl(hid_t) {}
 private:
     int _n_cells;
 };

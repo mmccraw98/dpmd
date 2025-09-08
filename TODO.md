@@ -1,4 +1,5 @@
 // TODO: add box resizing
+// TODO: add box resizing - needs to sync with cell sizes and resize particle positions
 // TODO: remove redundancy in the packing fraction box resizing calculations
 // TODO: add overrides to system level operations for uniform operation (i.e. passing a single scalar dt instead of an array)
 // TODO: implement cell list for rigid bumpy particles
@@ -10,6 +11,7 @@
 // TODO: verify that the set/restore last state code works with cell lists
 // TODO: verify that the box resizing code works with cell lists
 // TODO: test various position, velocity, force update schemes for the rigid bumpy particles
+// TODO: add post-processing routines
 // TODO: add particle init function (performs tested series of steps to set up all data)
 // TODO: add a particle validate function (checks everything is synced, sizes match expectation, etc,)
 // TODO: mirror particle classes in python as data classes
@@ -18,7 +20,6 @@
 // TODO: add size verification function - check that all n_particle length arrays are the same length and whatnot
 // TODO: add more tests for poly particle - vertex PE sum should match particle PE
 // TODO: elevate certain functions for rigid bumpy to poly particle - maybe make an intermediary - rigid poly?
-// TODO: add box resizing - needs to sync with cell sizes and resize particle positions
 // TODO: add fast data output system, works in parallel to main routine
 // TODO: design a system for getting arbitrary data and running arbitrary functions from particle object
 // TODO: implement tests (mainly for disk) with non-uniform values of radii and mass
