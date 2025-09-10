@@ -45,6 +45,28 @@ template<class T>
 struct has_load_from_hdf5_point_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().load_from_hdf5_point_extras_impl(std::declval<hid_t>()))>> : std::true_type {};
 
+
+template<class T, class = void>
+struct has_get_static_field_names_point_extras_impl : std::false_type {};
+template<class T>
+struct has_get_static_field_names_point_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().get_static_field_names_point_extras_impl())>> : std::true_type {};
+
+
+template<class T, class = void>
+struct has_get_state_field_names_point_extras_impl : std::false_type {};
+template<class T>
+struct has_get_state_field_names_point_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().get_state_field_names_point_extras_impl())>> : std::true_type {};
+
+
+template<class T, class = void>
+struct has_output_build_registry_point_extras_impl : std::false_type {};
+template<class T>
+struct has_output_build_registry_point_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().output_build_registry_point_extras_impl(std::declval<io::OutputRegistry&>()))>> : std::true_type {};
+
+
 namespace md {
 
 // Enum for the different cell sort methods
@@ -183,6 +205,65 @@ public:
         }
         if constexpr (has_load_from_hdf5_point_extras_impl<Derived>::value)
             this->derived().load_from_hdf5_point_extras_impl(group);
+    }
+ 
+    // Get the names of the fields that should be saved as static
+    std::vector<std::string> get_static_field_names_impl() {
+        std::vector<std::string> static_names {"e_interaction", "mass", "rad"};
+        std::vector<std::string> derived_names = this->derived().get_static_field_names_point_extras_impl();
+        static_names.insert(static_names.end(), derived_names.begin(), derived_names.end());
+        return static_names;
+    }
+
+    // Get the names of the fields that should be saved as state
+    std::vector<std::string> get_state_field_names_impl() {
+        std::vector<std::string> state_names {"pos", "vel", "force"};
+        std::vector<std::string> derived_names = this->derived().get_state_field_names_point_extras_impl();
+        state_names.insert(state_names.end(), derived_names.begin(), derived_names.end());
+        return state_names;
+    }
+
+    // Build the output registry
+    void output_build_registry_impl(io::OutputRegistry& reg) {
+        // Register point-specific fields
+        {
+            io::Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->pos; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["pos"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        }
+        {
+            io::Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vel; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vel"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        }
+        {
+            io::Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->force; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["force"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = []{};
+            p.get_device = [this]{ return &this->e_interaction; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["e_interaction"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::System, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = []{};
+            p.get_device = [this]{ return &this->mass; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["mass"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = []{};
+            p.get_device = [this]{ return &this->rad; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["rad"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        if constexpr (has_output_build_registry_point_extras_impl<Derived>::value)
+            this->derived().output_build_registry_point_extras_impl(reg);
     }
 
 

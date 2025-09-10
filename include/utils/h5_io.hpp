@@ -32,6 +32,37 @@ inline bool h5_link_exists(hid_t loc, const std::string& path) {
     return ex > 0;
 }
 
+// Attribute helpers
+inline bool h5_attr_exists(hid_t obj, const std::string& name) {
+    htri_t ex = H5Aexists(obj, name.c_str());
+    return ex > 0;
+}
+
+// Write a string attribute (variable-length UTF-8) on an object
+inline void h5_write_attr_string(hid_t obj, const std::string& name, const std::string& value) {
+    if (obj < 0) throw std::runtime_error("h5_write_attr_string: invalid object handle");
+    if (h5_attr_exists(obj, name)) {
+        if (H5Adelete(obj, name.c_str()) < 0)
+            throw std::runtime_error("h5_write_attr_string: failed to delete existing attribute: " + name);
+    }
+    hid_t atype = H5Tcopy(H5T_C_S1);
+    if (atype < 0) throw std::runtime_error("h5_write_attr_string: H5Tcopy failed");
+    if (H5Tset_size(atype, H5T_VARIABLE) < 0) { H5Tclose(atype); throw std::runtime_error("h5_write_attr_string: H5Tset_size failed"); }
+    if (H5Tset_cset(atype, H5T_CSET_UTF8) < 0) { H5Tclose(atype); throw std::runtime_error("h5_write_attr_string: H5Tset_cset failed"); }
+    hid_t space = H5Screate(H5S_SCALAR);
+    if (space < 0) { H5Tclose(atype); throw std::runtime_error("h5_write_attr_string: H5Screate failed"); }
+    hid_t attr = H5Acreate2(obj, name.c_str(), atype, space, H5P_DEFAULT, H5P_DEFAULT);
+    if (attr < 0) { H5Sclose(space); H5Tclose(atype); throw std::runtime_error("h5_write_attr_string: H5Acreate2 failed for " + name); }
+    const char* cstr = value.c_str();
+    if (H5Awrite(attr, atype, &cstr) < 0) {
+        H5Aclose(attr); H5Sclose(space); H5Tclose(atype);
+        throw std::runtime_error("h5_write_attr_string: H5Awrite failed for " + name);
+    }
+    H5Aclose(attr);
+    H5Sclose(space);
+    H5Tclose(atype);
+}
+
 // Map C++ types to HDF5 native types
 template<class T> inline hid_t h5_native();
 template<> inline hid_t h5_native<float>()                { return H5T_NATIVE_FLOAT; }
@@ -47,6 +78,80 @@ template<> inline hid_t h5_native<char>()                 { return H5T_NATIVE_CH
 template<> inline hid_t h5_native<unsigned char>()        { return H5T_NATIVE_UCHAR; }
 template<> inline hid_t h5_native<short>()                { return H5T_NATIVE_SHORT; }
 template<> inline hid_t h5_native<unsigned short>()       { return H5T_NATIVE_USHORT; }
+// Provide a benign specialization for std::string to satisfy potential template instantiations.
+// Note: actual string IO uses explicit specializations of read_scalar/write_scalar with variable-length types.
+template<> inline hid_t h5_native<std::string>()          { return H5T_C_S1; }
+
+// Forward declare generic read_scalar so the specialization is valid
+template <class T>
+inline T read_scalar(hid_t loc, const std::string& path);
+
+// Specialization: read scalar std::string (handles fixed or varlen)
+template <>
+inline std::string read_scalar<std::string>(hid_t loc, const std::string& path){
+    hid_t dset = H5Dopen2(loc, path.c_str(), H5P_DEFAULT);
+    if (dset < 0) throw std::runtime_error("read_scalar<string>: missing dataset: " + path);
+    hid_t space = H5Dget_space(dset);
+    if (space < 0) { H5Dclose(dset); throw std::runtime_error("read_scalar<string>: H5Dget_space failed: " + path); }
+    if (H5Sget_simple_extent_ndims(space) != 0) {
+        H5Sclose(space); H5Dclose(dset);
+        throw std::runtime_error("read_scalar<string>: expected scalar dataspace at " + path);
+    }
+    H5Sclose(space);
+
+    hid_t ftype = H5Dget_type(dset);
+    if (ftype < 0) { H5Dclose(dset); throw std::runtime_error("read_scalar<string>: H5Dget_type failed: " + path); }
+    if (H5Tget_class(ftype) != H5T_STRING) {
+        H5Tclose(ftype); H5Dclose(dset);
+        throw std::runtime_error("read_scalar<string>: dataset is not a string: " + path);
+    }
+    std::string out;
+    if (H5Tis_variable_str(ftype) > 0) {
+        // Try varlen read first, matching the file's cset
+        hid_t mtype = H5Tcopy(H5T_C_S1);
+        H5Tset_size(mtype, H5T_VARIABLE);
+        H5Tset_cset(mtype, H5Tget_cset(ftype));
+        char* rbuf = nullptr;
+        if (H5Dread(dset, mtype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, &rbuf) < 0){
+            // Fallback: treat as fixed-length and read with explicit size
+            H5Tclose(mtype);
+            size_t sz = H5Tget_size(ftype);
+            std::vector<char> buf(sz + 1, '\0');
+            hid_t mfix = H5Tcopy(H5T_C_S1);
+            H5Tset_size(mfix, sz);
+            H5Tset_cset(mfix, H5Tget_cset(ftype));
+            H5Tset_strpad(mfix, H5T_STR_NULLTERM);
+            if (H5Dread(dset, mfix, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, buf.data()) < 0){
+                H5Tclose(mfix); H5Tclose(ftype); H5Dclose(dset);
+                throw std::runtime_error("read_scalar<string>: H5Dread failed (varlen+fixed fallback) for " + path);
+            }
+            out = std::string(buf.data());
+            H5Tclose(mfix);
+        } else {
+            out = (rbuf ? std::string(rbuf) : std::string());
+            if (rbuf) H5free_memory(rbuf);
+            H5Tclose(mtype);
+        }
+    } else {
+        // fixed-length
+        size_t sz = H5Tget_size(ftype);
+        std::vector<char> buf(sz + 1, '\0');
+        hid_t mtype = H5Tcopy(H5T_C_S1);
+        H5Tset_size(mtype, sz);
+        H5Tset_cset(mtype, H5Tget_cset(ftype));
+        H5Tset_strpad(mtype, H5Tget_strpad(ftype));
+        if (H5Dread(dset, mtype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, buf.data()) < 0){
+            H5Tclose(mtype); H5Tclose(ftype); H5Dclose(dset);
+            throw std::runtime_error("read_scalar<string>: H5Dread failed (fixed) for " + path);
+        }
+        buf[sz] = '\0';
+        out = std::string(buf.data());
+        H5Tclose(mtype);
+    }
+    H5Tclose(ftype);
+    H5Dclose(dset);
+    return out;
+}
 
 template <class T>
 inline T read_scalar(hid_t loc, const std::string& path){

@@ -108,6 +108,18 @@ public:
     // Load from hdf5 group and initialize the particle
     void load_from_hdf5_point_extras_impl(hid_t group);
 
+    // Get the class name
+    std::string get_class_name_impl();
+
+    // Get the names of the fields that should be saved as static
+    std::vector<std::string> get_static_field_names_point_extras_impl();
+
+    // Get the names of the fields that should be saved as state
+    std::vector<std::string> get_state_field_names_point_extras_impl();
+
+    // Build the output registry
+    void output_build_registry_point_extras_impl(io::OutputRegistry& reg);
+
 private:
     df::DeviceField2D<double> last_state_pos;
     df::DeviceField1D<double> last_state_rad;

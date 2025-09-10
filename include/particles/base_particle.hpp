@@ -11,6 +11,11 @@
 #include <cub/device/device_segmented_reduce.cuh>
 #include <stdexcept>
 #include <cstddef>
+#include <map>
+#include <vector>
+#include <string>
+#include "utils/output_manager.hpp"
+#include <filesystem>
 
 namespace md {
 
@@ -72,7 +77,12 @@ public:
     NeighborMethod get_neighbor_method() const { return neighbor_method; }
 
     // Load from hdf5
-    void load_from_hdf5(std::string meta_path, std::string location) {
+    void load_from_hdf5(std::string path, std::string location) {
+        std::string meta_path = path + "/meta.h5";
+        // check if the meta file exists
+        if (!std::filesystem::exists(meta_path)) {
+            throw std::runtime_error("BaseParticle::load_from_hdf5: meta file does not exist: " + meta_path);
+        }
         // open the meta file
         hid_t meta_file = H5Fopen(meta_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
         if (meta_file < 0) {
@@ -82,7 +92,6 @@ public:
         // load static
         hid_t static_group = H5Gopen(meta_file, "static", H5P_DEFAULT);
         load_static_from_hdf5_group(static_group);  // load everything that is required
-        load_from_hdf5_group(static_group);  // load everything that is not required
         H5Gclose(static_group);
         
         // location: init, final, restart
@@ -118,18 +127,20 @@ public:
         const int S = read_scalar<int>(group, "n_systems");
         const int N = read_scalar<int>(group, "n_particles");
         const int Nv = read_scalar<int>(group, "n_vertices");
-        const std::string neighbor_method_str = read_scalar<std::string>(group, "neighbor_method");
-        if (neighbor_method_str == "naive") {
-            set_neighbor_method(NeighborMethod::Naive);
-        } else if (neighbor_method_str == "cell") {
-            set_neighbor_method(NeighborMethod::Cell);
-        } else {
-            throw std::runtime_error("BaseParticle::load_static_from_hdf5_group: invalid neighbor method");
-        }
         allocate_systems(S);
         allocate_particles(N);
         allocate_vertices(Nv);
-        set_neighbor_method(neighbor_method);
+
+        {
+            std::string neighbor_method_str = read_scalar<std::string>(group, "neighbor_method");
+            if (neighbor_method_str == "Naive") {
+                set_neighbor_method(NeighborMethod::Naive);
+            } else if (neighbor_method_str == "Cell") {
+                set_neighbor_method(NeighborMethod::Cell);
+            } else {
+                throw std::runtime_error("BaseParticle::load_static_from_hdf5_group: invalid neighbor method");
+            }
+        }
 
         // system data
         system_id.from_host(read_vector<int>(group, "system_id"));
@@ -165,40 +176,30 @@ public:
         if (h5_link_exists(group, "cell_dim")) {  // if the cell dim has been changed, load it again
             cell_dim.from_host(read_vector_2d<int>(group, "cell_dim"));
         }
-        if 
-        this->packing_fraction.fill(0.0);
         if (h5_link_exists(group, "packing_fraction")) {
             packing_fraction.from_host(read_vector<double>(group, "packing_fraction"));
         }
-        this->pressure.fill(0.0);
         if (h5_link_exists(group, "pressure")) {
             pressure.from_host(read_vector<double>(group, "pressure"));
         }
-        this->temperature.fill(0.0);
         if (h5_link_exists(group, "temperature")) {
             temperature.from_host(read_vector<double>(group, "temperature"));
         }
-        this->area.fill(0.0);
         if (h5_link_exists(group, "area")) {
             area.from_host(read_vector<double>(group, "area"));
         }
-        this->pe.fill(0.0);
         if (h5_link_exists(group, "pe")) {
             pe.from_host(read_vector<double>(group, "pe"));
         }
-        this->ke.fill(0.0);
         if (h5_link_exists(group, "ke")) {
             ke.from_host(read_vector<double>(group, "ke"));
         }
-        this->pe_total.fill(0.0);
         if (h5_link_exists(group, "pe_total")) {
             pe_total.from_host(read_vector<double>(group, "pe_total"));
         }
-        this->ke_total.fill(0.0);
         if (h5_link_exists(group, "ke_total")) {
             ke_total.from_host(read_vector<double>(group, "ke_total"));
         }
-        this->fpower_total.fill(0.0);
         if (h5_link_exists(group, "fpower_total")) {
             fpower_total.from_host(read_vector<double>(group, "fpower_total"));
         }
@@ -266,6 +267,8 @@ public:
     void allocate_particles(int N) {
         pos.resize(N); vel.resize(N); force.resize(N); pe.resize(N); ke.resize(N);
         area.resize(N);
+        pos.fill(0.0, 0.0); vel.fill(0.0, 0.0); force.fill(0.0, 0.0); pe.fill(0.0); ke.fill(0.0);
+        area.fill(0.0);
         derived().allocate_particles_impl(N);
     }
 
@@ -279,6 +282,9 @@ public:
         box_size.resize(S); box_inv.resize(S); system_size.resize(S); system_offset.resize(S+1);
         packing_fraction.resize(S); pressure.resize(S); temperature.resize(S); pe_total.resize(S); ke_total.resize(S);
         verlet_skin.resize(S); thresh2.resize(S); cub_sys_agg.resize(S);
+        box_size.fill(0.0, 0.0); box_inv.fill(0.0, 0.0); system_size.fill(0); system_offset.fill(0);
+        packing_fraction.fill(0.0); pressure.fill(0.0); temperature.fill(0.0); pe_total.fill(0.0); ke_total.fill(0.0);
+        verlet_skin.fill(0.0); thresh2.fill(0.0); cub_sys_agg.fill(0);
         derived().allocate_systems_impl(S);
     }
 
@@ -617,6 +623,201 @@ public:
         restore_state(flag, true_val);
     }
 
+    // =============================
+    // Field maps for OutputManager
+    // =============================
+
+    // Get the class name as a string
+    std::string get_class_name() { return derived().get_class_name_impl(); }
+
+    // Get the names of the fields that should be saved as static
+    std::vector<std::string> get_static_field_names() {
+        std::vector<std::string> static_names {"system_id", "system_size", "system_offset", "box_size"};
+        if (get_neighbor_method() == NeighborMethod::Cell) {
+            std::vector<std::string> cell_names {"cell_size", "cell_dim", "cell_system_start", "verlet_skin", "thresh2"};
+            static_names.insert(static_names.end(), cell_names.begin(), cell_names.end());
+        }
+        std::vector<std::string> derived_names = derived().get_static_field_names_impl();
+        static_names.insert(static_names.end(), derived_names.begin(), derived_names.end());
+        return static_names;
+    }
+
+    // Get the names of the fields that should be saved as state
+    std::vector<std::string> get_state_field_names()  {
+        // there are no state fields for the base particle
+        return derived().get_state_field_names_impl();
+    }
+
+    // Base provides common fields; derived can extend via CRTP hooks
+    void output_build_registry(io::OutputRegistry& reg) {
+        using io::FieldDesc; using io::Dimensionality; using io::IndexSpace; using io::Provider2D; using io::Provider1D;
+        // questions on this:
+        // do we need the index space?  what does it do?
+        // for things that dont have an index or an ensure_ready function call, can we leave it blank to de-clutter the code?
+        // do we need to pass the dimensionality if we are already specifying Provider1D / 2D?  seems redundant
+        // for arrays that can be reordered (if relevant), would it be easier to pass the reorder array to the Provider as we do the array itself? then could leave it blank for arrays that dont support reordering
+        // can we implement a heirarchical dependency calculation system so that we dont duplicate ensure_ready calculations?
+        // relatedly, we may want to rename ensure_ready to handle_dependencies or something like that
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->pe; };
+            p.index_space = IndexSpace::System;
+            reg.fields["pe"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{ this->compute_ke(); };
+            p.get_device = [this]{ return &this->ke; };
+            p.index_space = IndexSpace::System;
+            reg.fields["ke"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->area; };
+            p.index_space = IndexSpace::System;
+            reg.fields["area"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        }
+        // {  // not sure how to handle this one
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->neighbor_count; };
+        //     p.index_space = ;
+        //     reg.fields["neighbor_count"] = FieldDesc{ Dimensionality::D1, p, {}};
+        // }
+        // {  // not sure how to handle this one
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->neighbor_start; };
+        //     p.index_space = ;
+        //     reg.fields["neighbor_start"] = FieldDesc{ Dimensionality::D1, p, {} };
+        // }
+        // {  // not sure how to handle this one
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->neighbor_ids; };
+        //     p.index_space = ;
+        //     reg.fields["neighbor_ids"] = FieldDesc{ Dimensionality::D1, p, {} };
+        // }
+        // {  // this may need to be in the point subclass only as cell id may be a vertex level thing
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->cell_id; };
+        //     p.index_space = IndexSpace::System;
+        //     reg.fields["cell_id"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        // }
+        // {  // this may need to be in the point subclass only as cell id may be a vertex level thing
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->cell_count; };
+        //     p.index_space = IndexSpace::System;
+        //     reg.fields["cell_count"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        // }
+        // {  // this may need to be in the point subclass only as cell id may be a vertex level thing
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->cell_start; };
+        //     p.index_space = IndexSpace::System;
+        //     reg.fields["cell_start"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        // }
+        // {
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->order; };
+        //     p.index_space = IndexSpace::System;
+        //     reg.fields["order"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        // }
+        // {
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->order_inv; };
+        //     p.index_space = IndexSpace::System;
+        //     reg.fields["order_inv"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+        // }
+        {
+            Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->cell_size; };
+            p.index_space = IndexSpace::System;
+            reg.fields["cell_size"] = FieldDesc{ Dimensionality::D2, IndexSpace::System, {}, p };
+        }
+        {
+            Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->cell_dim; };
+            p.index_space = IndexSpace::System;
+            reg.fields["cell_dim"] = FieldDesc{ Dimensionality::D2, IndexSpace::System, {}, p };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->cell_system_start; };
+            p.index_space = IndexSpace::System;
+            reg.fields["cell_system_start"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->verlet_skin; };
+            p.index_space = IndexSpace::System;
+            reg.fields["verlet_skin"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->thresh2; };
+            p.index_space = IndexSpace::System;
+            reg.fields["thresh2"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->system_id; };
+            p.index_space = IndexSpace::System;
+            reg.fields["system_id"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->system_size; };
+            p.index_space = IndexSpace::System;
+            reg.fields["system_size"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->system_offset; };
+            p.index_space = IndexSpace::System;
+            reg.fields["system_offset"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        {
+            Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->box_size; };
+            p.index_space = IndexSpace::System;
+            reg.fields["box_size"] = FieldDesc{ Dimensionality::D2, IndexSpace::System, {}, p };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{ this->compute_packing_fraction(); };
+            p.get_device = [this]{ return &this->packing_fraction; };
+            p.index_space = IndexSpace::System;
+            reg.fields["packing_fraction"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        // {  // not supported yet
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->pressure; };
+        //     p.index_space = IndexSpace::System;
+        //     reg.fields["pressure"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        // }
+        // {  // not supported yet
+        //     Provider1D p; p.ensure_ready = []{};
+        //     p.get_device = [this]{ return &this->temperature; };
+        //     p.index_space = IndexSpace::System;
+        //     reg.fields["temperature"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        // }
+        {
+            Provider1D p; p.ensure_ready = [this]{ this->compute_pe_total(); };
+            p.get_device = [this]{ return &this->pe_total; };
+            p.index_space = IndexSpace::System;
+            reg.fields["pe_total"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        {
+            Provider1D p; p.ensure_ready = [this]{ this->compute_ke_total(); };
+            p.get_device = [this]{ return &this->ke_total; };
+            p.index_space = IndexSpace::System;
+            reg.fields["ke_total"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+        }
+        derived().output_build_registry_impl(reg);
+    }
+
+    void output_capture_inverse_orders(std::vector<int>& inv_particles, std::vector<int>& inv_vertices) const {
+        inv_particles.clear(); inv_vertices.clear();
+        if (order_inv.size() == n_particles() && n_particles() > 0) {
+            order_inv.to_host(inv_particles);
+        }
+    }
+
 protected:
     Derived&       derived()       { return static_cast<Derived&>(*this); }
     const Derived& derived() const { return static_cast<const Derived&>(*this); }
@@ -650,6 +851,10 @@ protected:
     void restore_state_impl(df::DeviceField1D<int>, int) {}
     void load_from_hdf5_group_impl(hid_t) {}
     void load_static_from_hdf5_group_impl(hid_t) {}
+    std::string get_class_name_impl() { return ""; }
+    std::vector<std::string> get_static_field_names_impl() { return {}; }
+    std::vector<std::string> get_state_field_names_impl() { return {}; }
+    void output_build_registry_impl(io::OutputRegistry&) {}
 private:
     int _n_cells;
 };

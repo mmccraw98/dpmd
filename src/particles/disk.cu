@@ -712,5 +712,20 @@ void Disk::load_from_hdf5_point_extras_impl(hid_t group) {
     // nothing to do
 }
 
+std::string Disk::get_class_name_impl() {
+    return "Disk";
+}
+
+std::vector<std::string> Disk::get_static_field_names_point_extras_impl() {
+    return {};  // nothing extra for disks
+}
+
+std::vector<std::string> Disk::get_state_field_names_point_extras_impl() {
+    return {};  // nothing extra for disks
+}
+
+void Disk::output_build_registry_point_extras_impl(io::OutputRegistry& reg) {
+    // nothing extra for disks
+}
 
 } // namespace md::disk

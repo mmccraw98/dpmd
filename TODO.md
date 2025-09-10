@@ -1,3 +1,8 @@
+// TODO: redesign all data so that it is all saved arbitrarily many times at different timesteps - when you index the data at a given step, each value is defined as its most recent saved state
+// TODO: add center-of-mass velocity cancelling
+// TODO: add a save method that saves only elements from a given index
+// TODO: add pairwise calculations (contacts), add hessian, add stress, add pressure
+// TODO: add relevant plotting to python library - plot, animate, draw contact network
 // TODO: add box resizing
 // TODO: add box resizing - needs to sync with cell sizes and resize particle positions
 // TODO: remove redundancy in the packing fraction box resizing calculations

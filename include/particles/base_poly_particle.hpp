@@ -57,6 +57,28 @@ template<class T>
 struct has_load_from_hdf5_poly_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().load_from_hdf5_poly_extras_impl(std::declval<hid_t>()))>> : std::true_type {};
 
+
+template<class T, class = void>
+struct has_get_static_field_names_poly_extras_impl : std::false_type {};
+template<class T>
+struct has_get_static_field_names_poly_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().get_static_field_names_poly_extras_impl())>> : std::true_type {};
+
+
+template<class T, class = void>
+struct has_get_state_field_names_poly_extras_impl : std::false_type {};
+template<class T>
+struct has_get_state_field_names_poly_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().get_state_field_names_poly_extras_impl())>> : std::true_type {};
+
+
+template<class T, class = void>
+struct has_output_build_registry_poly_extras_impl : std::false_type {};
+template<class T>
+struct has_output_build_registry_poly_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().output_build_registry_poly_extras_impl(std::declval<io::OutputRegistry&>()))>> : std::true_type {};
+
+
 namespace md {
 
 // Enum for the different cell sort methods
@@ -89,6 +111,8 @@ public:
     void allocate_particles_impl(int N) {
         this->n_vertices_per_particle.resize(N);
         this->particle_offset.resize(N+1);
+        this->n_vertices_per_particle.fill(0);
+        this->particle_offset.fill(0);
         if constexpr (has_allocate_poly_extras_impl<Derived>::value)
             this->derived().allocate_poly_extras_impl(N);
     }
@@ -103,6 +127,14 @@ public:
         this->vertex_rad.resize(Nv);
         this->vertex_particle_id.resize(Nv);
         this->vertex_system_id.resize(Nv);
+        this->vertex_pos.fill(0.0, 0.0);
+        this->vertex_vel.fill(0.0, 0.0);
+        this->vertex_force.fill(0.0, 0.0);
+        this->vertex_pe.fill(0.0);
+        this->vertex_mass.fill(0.0);
+        this->vertex_rad.fill(0.0);
+        this->vertex_particle_id.fill(0);
+        this->vertex_system_id.fill(0);
         if constexpr (has_allocate_poly_vertex_extras_impl<Derived>::value)
             this->derived().allocate_poly_vertex_extras_impl(Nv);
     }
@@ -112,6 +144,9 @@ public:
         this->e_interaction.resize(S);
         this->vertex_system_offset.resize(S+1);
         this->vertex_system_size.resize(S);
+        this->e_interaction.fill(0.0);
+        this->vertex_system_offset.fill(0);
+        this->vertex_system_size.fill(0);
         if constexpr (has_allocate_poly_system_extras_impl<Derived>::value)
             this->derived().allocate_poly_system_extras_impl(S);
     }
@@ -202,7 +237,7 @@ public:
     }
 
     // Load static data from hdf5 group and initialize the particle
-    void load_static_from_hdf5_poly_extras_impl(hid_t group) {
+    void load_static_from_hdf5_group_impl(hid_t group) {
         this->e_interaction.from_host(read_vector<double>(group, "e_interaction"));
         this->vertex_mass.from_host(read_vector<double>(group, "vertex_mass"));
         this->vertex_rad.from_host(read_vector<double>(group, "vertex_rad"));
@@ -217,22 +252,121 @@ public:
     }
 
     // Load from hdf5 group and initialize the particle
-    void load_from_hdf5_poly_extras_impl(hid_t group) {
+    void load_from_hdf5_group_impl(hid_t group) {
         this->vertex_pos.from_host(read_vector_2d<double>(group, "vertex_pos"));
-        this->vertex_vel.fill(0.0, 0.0);
         if (h5_link_exists(group, "vertex_vel")) {
             this->vertex_vel.from_host(read_vector_2d<double>(group, "vertex_vel"));
         }
-        this->vertex_force.fill(0.0, 0.0);
         if (h5_link_exists(group, "vertex_force")) {
             this->vertex_force.from_host(read_vector_2d<double>(group, "vertex_force"));
         }
-        this->vertex_pe.fill(0.0);
         if (h5_link_exists(group, "vertex_pe")) {
             this->vertex_pe.from_host(read_vector<double>(group, "vertex_pe"));
         }
         if constexpr (has_load_from_hdf5_poly_extras_impl<Derived>::value)
             this->derived().load_from_hdf5_poly_extras_impl(group);
+    }
+
+
+    // Get the names of the fields that should be saved as static
+    std::vector<std::string> get_static_field_names_impl() {
+        std::vector<std::string> static_names {"e_interaction", "vertex_mass", "vertex_rad", "n_vertices_per_particle", "particle_offset", "vertex_particle_id", "vertex_system_id", "vertex_system_offset", "vertex_system_size"};
+        std::vector<std::string> derived_names = this->derived().get_static_field_names_poly_extras_impl();
+        static_names.insert(static_names.end(), derived_names.begin(), derived_names.end());
+        return static_names;
+    }
+
+    // Get the names of the fields that should be saved as state
+    std::vector<std::string> get_state_field_names_impl() {
+        std::vector<std::string> state_names {"vertex_pos"};
+        std::vector<std::string> derived_names = this->derived().get_state_field_names_poly_extras_impl();
+        state_names.insert(state_names.end(), derived_names.begin(), derived_names.end());
+        return state_names;
+    }
+
+    // Build the output registry
+    void output_build_registry_impl(io::OutputRegistry& reg) {
+        // Register poly-specific fields
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->e_interaction; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["e_interaction"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::System, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->n_vertices_per_particle; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["n_vertices_per_particle"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->particle_offset; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["particle_offset"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_particle_id; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_particle_id"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_system_id; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_system_id"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_system_offset; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_system_offset"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_system_size; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_system_size"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_pos; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_pos"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        }
+        {
+            io::Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_vel; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_vel"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        }
+        {
+            io::Provider2D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_force; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_force"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_pe; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_pe"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_mass; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_mass"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        {
+            io::Provider1D p; p.ensure_ready = [this]{};
+            p.get_device = [this]{ return &this->vertex_rad; };
+            p.index_space = io::IndexSpace::Particle;
+            reg.fields["vertex_rad"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        }
+        if constexpr (has_output_build_registry_poly_extras_impl<Derived>::value)
+            this->derived().output_build_registry_poly_extras_impl(reg);
     }
 
 private:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "particles/base_poly_particle.hpp"
+#include "utils/output_manager.hpp"
 
 namespace md::rigid_bumpy {
 
@@ -102,6 +103,18 @@ public:
     void load_static_from_hdf5_poly_extras_impl(hid_t group);
 
     void load_from_hdf5_poly_extras_impl(hid_t group);
+
+    // Get the class name
+    std::string get_class_name_impl();
+
+    // Get the names of the fields that should be saved as static
+    std::vector<std::string> get_static_field_names_poly_extras_impl();
+
+    // Get the names of the fields that should be saved as state
+    std::vector<std::string> get_state_field_names_poly_extras_impl();
+
+    // Build the output registry
+    void output_build_registry_poly_extras_impl(io::OutputRegistry& reg);
 
 private:
     df::DeviceField2D<double> last_state_pos;

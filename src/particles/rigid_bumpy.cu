@@ -715,23 +715,21 @@ void RigidBumpy::allocate_poly_extras_impl(int N) {
     this->torque.resize(N);
     this->angular_vel.resize(N);
     this->angle.resize(N);
-    // throw std::runtime_error("RigidBumpy::allocate_poly_extras_impl: not implemented");
-    std::cout << "RigidBumpy::allocate_poly_extras_impl: not implemented\n";
+    this->torque.fill(0.0);
+    this->angular_vel.fill(0.0);
+    this->angle.fill(0.0);
 }
 
 void RigidBumpy::allocate_poly_vertex_extras_impl(int Nv) {
-    // throw std::runtime_error("RigidBumpy::allocate_poly_vertex_extras_impl: not implemented");
-    std::cout << "RigidBumpy::allocate_poly_vertex_extras_impl: not implemented\n";
+    // nothing to do
 }
 
 void RigidBumpy::allocate_poly_system_extras_impl(int S) {
-    // throw std::runtime_error("RigidBumpy::allocate_poly_system_extras_impl: not implemented");
-    std::cout << "RigidBumpy::allocate_poly_system_extras_impl: not implemented\n";
+    // nothing to do
 }
 
 void RigidBumpy::enable_poly_swap_extras_impl(bool enable) {
-    // throw std::runtime_error("RigidBumpy::enable_poly_swap_extras_impl: not implemented");
-    std::cout << "RigidBumpy::enable_poly_swap_extras_impl: not implemented\n";
+    // nothing to do
 }
 
 
@@ -925,22 +923,83 @@ void RigidBumpy::load_static_from_hdf5_poly_extras_impl(hid_t group) {
 void RigidBumpy::load_from_hdf5_poly_extras_impl(hid_t group) {
     this->angle.from_host(read_vector<double>(group, "angle"));
     this->pos.from_host(read_vector_2d<double>(group, "pos"));
-    this->vel.fill(0.0, 0.0);
     if (h5_link_exists(group, "vel")) {
         this->vel.from_host(read_vector_2d<double>(group, "vel"));
     }
-    this->force.fill(0.0, 0.0);
     if (h5_link_exists(group, "force")) {
         this->force.from_host(read_vector_2d<double>(group, "force"));
     }
-    this->torque.fill(0.0);
     if (h5_link_exists(group, "torque")) {
         this->torque.from_host(read_vector<double>(group, "torque"));
     }
-    this->angular_vel.fill(0.0);
     if (h5_link_exists(group, "angular_vel")) {
         this->angular_vel.from_host(read_vector<double>(group, "angular_vel"));
     }
 }
+
+std::string RigidBumpy::get_class_name_impl() {
+    return "RigidBumpy";
+}
+
+std::vector<std::string> RigidBumpy::get_static_field_names_poly_extras_impl() {
+    return {"mass", "moment_inertia"};
+}
+
+std::vector<std::string> RigidBumpy::get_state_field_names_poly_extras_impl() {
+    return {"pos", "vel", "force", "torque", "angular_vel"};
+}
+
+void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg) {
+    // Register rigid bumpy specific fields
+    {
+        io::Provider1D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->mass; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["mass"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+    }
+    {
+        io::Provider1D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->moment_inertia; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["moment_inertia"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+    }
+    {
+        io::Provider2D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->pos; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["pos"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+    }
+    {
+        io::Provider2D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->vel; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["vel"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+    }
+    {
+        io::Provider2D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->force; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["force"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+    }
+    {
+        io::Provider1D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->angle; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["angle"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+    }
+    {
+        io::Provider1D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->torque; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["torque"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+    }
+    {
+        io::Provider1D p; p.ensure_ready = [this]{};
+        p.get_device = [this]{ return &this->angular_vel; };
+        p.index_space = io::IndexSpace::Particle;
+        reg.fields["angular_vel"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+    }
+}
+
 
 } // namespace md::rigid_bumpy
