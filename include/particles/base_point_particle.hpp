@@ -227,40 +227,46 @@ public:
     void output_build_registry_impl(io::OutputRegistry& reg) {
         // Register point-specific fields
         {
-            io::Provider2D p; p.ensure_ready = [this]{};
+            io::Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->pos; };
             p.index_space = io::IndexSpace::Particle;
-            reg.fields["pos"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+            reg.fields["pos"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Particle, p);
         }
         {
-            io::Provider2D p; p.ensure_ready = [this]{};
+            io::Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vel; };
             p.index_space = io::IndexSpace::Particle;
-            reg.fields["vel"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+            reg.fields["vel"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Particle, p);
         }
         {
-            io::Provider2D p; p.ensure_ready = [this]{};
+            io::Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->force; };
             p.index_space = io::IndexSpace::Particle;
-            reg.fields["force"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+            reg.fields["force"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Particle, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = []{};
+            io::Provider1D<double> p; 
+            p.ensure_ready = []{};
             p.get_device = [this]{ return &this->e_interaction; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["e_interaction"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::System, p, {} };
+            p.index_space = io::IndexSpace::System;
+            reg.fields["e_interaction"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::System, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = []{};
+            io::Provider1D<double> p; 
+            p.ensure_ready = []{};
             p.get_device = [this]{ return &this->mass; };
             p.index_space = io::IndexSpace::Particle;
-            reg.fields["mass"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            reg.fields["mass"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = []{};
+            io::Provider1D<double> p; 
+            p.ensure_ready = []{};
             p.get_device = [this]{ return &this->rad; };
             p.index_space = io::IndexSpace::Particle;
-            reg.fields["rad"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            reg.fields["rad"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
         }
         if constexpr (has_output_build_registry_point_extras_impl<Derived>::value)
             this->derived().output_build_registry_point_extras_impl(reg);

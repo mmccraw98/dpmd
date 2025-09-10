@@ -288,82 +288,95 @@ public:
     void output_build_registry_impl(io::OutputRegistry& reg) {
         // Register poly-specific fields
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->e_interaction; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["e_interaction"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::System, p, {} };
+            p.index_space = io::IndexSpace::System;
+            reg.fields["e_interaction"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::System, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->n_vertices_per_particle; };
             p.index_space = io::IndexSpace::Particle;
-            reg.fields["n_vertices_per_particle"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            reg.fields["n_vertices_per_particle"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->particle_offset; };
             p.index_space = io::IndexSpace::Particle;
-            reg.fields["particle_offset"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            reg.fields["particle_offset"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_particle_id; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_particle_id"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_particle_id"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Vertex, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_system_id; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_system_id"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_system_id"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Vertex, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_system_offset; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_system_offset"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            p.index_space = io::IndexSpace::System;
+            reg.fields["vertex_system_offset"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::System, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_system_size; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_system_size"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            p.index_space = io::IndexSpace::System;
+            reg.fields["vertex_system_size"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::System, p);
         }
         {
-            io::Provider2D p; p.ensure_ready = [this]{};
+            io::Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_pos; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_pos"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_pos"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Vertex, p);
         }
         {
-            io::Provider2D p; p.ensure_ready = [this]{};
+            io::Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_vel; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_vel"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_vel"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Vertex, p);
         }
         {
-            io::Provider2D p; p.ensure_ready = [this]{};
+            io::Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_force; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_force"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_force"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Vertex, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_pe; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_pe"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_pe"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Vertex, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_mass; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_mass"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_mass"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Vertex, p);
         }
         {
-            io::Provider1D p; p.ensure_ready = [this]{};
+            io::Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->vertex_rad; };
-            p.index_space = io::IndexSpace::Particle;
-            reg.fields["vertex_rad"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+            p.index_space = io::IndexSpace::Vertex;
+            reg.fields["vertex_rad"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Vertex, p);
         }
         if constexpr (has_output_build_registry_poly_extras_impl<Derived>::value)
             this->derived().output_build_registry_poly_extras_impl(reg);

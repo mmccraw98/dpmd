@@ -190,6 +190,29 @@ inline void write_scalar(hid_t loc, const std::string& path, const T& value){
     H5Dclose(dset); H5Sclose(space);
 }
 
+// Specialization: write scalar std::string (variable-length UTF-8 dataset)
+template <>
+inline void write_scalar<std::string>(hid_t loc, const std::string& path, const std::string& value){
+    if (h5_link_exists(loc, path)) {
+        if (H5Ldelete(loc, path.c_str(), H5P_DEFAULT) < 0)
+            throw std::runtime_error("write_scalar<string>: failed to delete existing link: " + path);
+    }
+    hid_t atype = H5Tcopy(H5T_C_S1);
+    if (atype < 0) throw std::runtime_error("write_scalar<string>: H5Tcopy failed");
+    if (H5Tset_size(atype, H5T_VARIABLE) < 0) { H5Tclose(atype); throw std::runtime_error("write_scalar<string>: H5Tset_size failed"); }
+    if (H5Tset_cset(atype, H5T_CSET_UTF8) < 0) { H5Tclose(atype); throw std::runtime_error("write_scalar<string>: H5Tset_cset failed"); }
+    hid_t space = H5Screate(H5S_SCALAR);
+    if (space < 0) { H5Tclose(atype); throw std::runtime_error("write_scalar<string>: H5Screate failed"); }
+    hid_t dset  = H5Dcreate2(loc, path.c_str(), atype, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (dset < 0) { H5Sclose(space); H5Tclose(atype); throw std::runtime_error("write_scalar<string>: H5Dcreate2 failed for " + path); }
+    const char* cstr = value.c_str();
+    if (H5Dwrite(dset, atype, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT, &cstr) < 0){
+        H5Dclose(dset); H5Sclose(space); H5Tclose(atype);
+        throw std::runtime_error("write_scalar<string>: H5Dwrite failed for " + path);
+    }
+    H5Dclose(dset); H5Sclose(space); H5Tclose(atype);
+}
+
 template<class T>
 inline std::vector<T> read_vector(hid_t loc, const std::string& dset_path) {
     hid_t dset = H5Dopen2(loc, dset_path.c_str(), H5P_DEFAULT);

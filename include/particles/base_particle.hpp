@@ -659,22 +659,25 @@ public:
         // can we implement a heirarchical dependency calculation system so that we dont duplicate ensure_ready calculations?
         // relatedly, we may want to rename ensure_ready to handle_dependencies or something like that
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->pe; };
-            p.index_space = IndexSpace::System;
-            reg.fields["pe"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+            p.index_space = IndexSpace::Particle;
+            reg.fields["pe"] = FieldDesc(Dimensionality::D1, IndexSpace::Particle, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{ this->compute_ke(); };
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{ this->compute_ke(); };
             p.get_device = [this]{ return &this->ke; };
-            p.index_space = IndexSpace::System;
-            reg.fields["ke"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+            p.index_space = IndexSpace::Particle;
+            reg.fields["ke"] = FieldDesc(Dimensionality::D1, IndexSpace::Particle, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->area; };
-            p.index_space = IndexSpace::System;
-            reg.fields["area"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
+            p.index_space = IndexSpace::Particle;
+            reg.fields["area"] = FieldDesc(Dimensionality::D1, IndexSpace::Particle, p);
         }
         // {  // not sure how to handle this one
         //     Provider1D p; p.ensure_ready = []{};
@@ -725,64 +728,74 @@ public:
         //     reg.fields["order_inv"] = FieldDesc{ Dimensionality::D1, IndexSpace::Particle, p, {} };
         // }
         {
-            Provider2D p; p.ensure_ready = [this]{};
+            Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->cell_size; };
             p.index_space = IndexSpace::System;
-            reg.fields["cell_size"] = FieldDesc{ Dimensionality::D2, IndexSpace::System, {}, p };
+            reg.fields["cell_size"] = FieldDesc(Dimensionality::D2, IndexSpace::System, p);
         }
         {
-            Provider2D p; p.ensure_ready = [this]{};
+            Provider2D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->cell_dim; };
             p.index_space = IndexSpace::System;
-            reg.fields["cell_dim"] = FieldDesc{ Dimensionality::D2, IndexSpace::System, {}, p };
+            reg.fields["cell_dim"] = FieldDesc(Dimensionality::D2, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->cell_system_start; };
             p.index_space = IndexSpace::System;
-            reg.fields["cell_system_start"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["cell_system_start"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->verlet_skin; };
             p.index_space = IndexSpace::System;
-            reg.fields["verlet_skin"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["verlet_skin"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->thresh2; };
             p.index_space = IndexSpace::System;
-            reg.fields["thresh2"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["thresh2"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->system_id; };
             p.index_space = IndexSpace::System;
-            reg.fields["system_id"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["system_id"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->system_size; };
             p.index_space = IndexSpace::System;
-            reg.fields["system_size"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["system_size"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{};
+            Provider1D<int> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->system_offset; };
             p.index_space = IndexSpace::System;
-            reg.fields["system_offset"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["system_offset"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         {
-            Provider2D p; p.ensure_ready = [this]{};
+            Provider2D<double> p; 
+            p.ensure_ready = [this]{};
             p.get_device = [this]{ return &this->box_size; };
             p.index_space = IndexSpace::System;
-            reg.fields["box_size"] = FieldDesc{ Dimensionality::D2, IndexSpace::System, {}, p };
+            reg.fields["box_size"] = FieldDesc(Dimensionality::D2, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{ this->compute_packing_fraction(); };
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{ this->compute_packing_fraction(); };
             p.get_device = [this]{ return &this->packing_fraction; };
             p.index_space = IndexSpace::System;
-            reg.fields["packing_fraction"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["packing_fraction"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         // {  // not supported yet
         //     Provider1D p; p.ensure_ready = []{};
@@ -797,16 +810,18 @@ public:
         //     reg.fields["temperature"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
         // }
         {
-            Provider1D p; p.ensure_ready = [this]{ this->compute_pe_total(); };
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{ this->compute_pe_total(); };
             p.get_device = [this]{ return &this->pe_total; };
             p.index_space = IndexSpace::System;
-            reg.fields["pe_total"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["pe_total"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         {
-            Provider1D p; p.ensure_ready = [this]{ this->compute_ke_total(); };
+            Provider1D<double> p; 
+            p.ensure_ready = [this]{ this->compute_ke_total(); };
             p.get_device = [this]{ return &this->ke_total; };
             p.index_space = IndexSpace::System;
-            reg.fields["ke_total"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
+            reg.fields["ke_total"] = FieldDesc(Dimensionality::D1, IndexSpace::System, p);
         }
         derived().output_build_registry_impl(reg);
     }

@@ -12,7 +12,8 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
-
+#include <variant>
+#include <typeindex>
 
 #include "utils/h5_io.hpp"
 #include "utils/device_fields.cuh"
@@ -23,33 +24,89 @@ namespace io {
 enum class IndexSpace { Particle, Vertex, System, None };
 enum class Dimensionality { D1, D2 };
 
-// Provider (no virtuals; store lambdas/struct functors)
+// Provider (no virtuals; store lambdas/struct functors) - templated for any type T
+template<typename T>
 struct Provider1D {
-    std::function<void()> ensure_ready;                      // launch any prerequisites on the simulation stream
-    std::function<df::DeviceField1D<double>*()> get_device;  // stable pointer to data (or staging)
+    std::function<void()> ensure_ready;                    // launch any prerequisites on the simulation stream
+    std::function<df::DeviceField1D<T>*()> get_device;    // stable pointer to data (or staging)  
     IndexSpace index_space = IndexSpace::Particle;
+    using value_type = T;  // for template metaprogramming
 };
 
+template<typename T>
 struct Provider2D {
     std::function<void()> ensure_ready;
-    std::function<df::DeviceField2D<double>*()> get_device;
+    std::function<df::DeviceField2D<T>*()> get_device;
     IndexSpace index_space = IndexSpace::Particle;
+    using value_type = T;  // for template metaprogramming
 };
+
+// Variant types for heterogeneous Provider storage (matching DeviceField type instantiations)
+using ProviderVariant1D = std::variant<
+    Provider1D<float>, Provider1D<double>, Provider1D<int>,
+    Provider1D<unsigned int>, Provider1D<long>, Provider1D<unsigned long long>,
+    Provider1D<unsigned char>
+>;
+
+using ProviderVariant2D = std::variant<
+    Provider2D<float>, Provider2D<double>, Provider2D<int>,
+    Provider2D<unsigned int>, Provider2D<long>, Provider2D<unsigned long long>,
+    Provider2D<unsigned char>
+>;
 
 struct FieldDesc {
     Dimensionality dim;
     IndexSpace index_space;
-    Provider1D p1d;   // used if dim == D1
-    Provider2D p2d;   // used if dim == D2
+    std::type_index type_info;        // runtime type identification
+    ProviderVariant1D p1d_variant;    // used if dim == D1
+    ProviderVariant2D p2d_variant;    // used if dim == D2
+    
+    // Default constructor for std::map usage
+    FieldDesc() : dim(Dimensionality::D1), index_space(IndexSpace::None), type_info(std::type_index(typeid(void))) {}
+    
+    // Constructor to initialize type_info properly
+    template<typename T>
+    FieldDesc(Dimensionality d, IndexSpace space, Provider1D<T> p1d) 
+        : dim(d), index_space(space), type_info(std::type_index(typeid(T))), p1d_variant(std::move(p1d)) {}
+    
+    template<typename T>
+    FieldDesc(Dimensionality d, IndexSpace space, Provider2D<T> p2d)
+        : dim(d), index_space(space), type_info(std::type_index(typeid(T))), p2d_variant(std::move(p2d)) {}
 };
 
 struct OutputRegistry {
     std::map<std::string, FieldDesc> fields; // name -> descriptor
 };
 
-// Host buffers
-struct Host1D { std::vector<double> v; int N = 0; IndexSpace space = IndexSpace::None; };
-struct Host2D { std::vector<double> x, y; int N = 0; IndexSpace space = IndexSpace::None; };
+// Host buffers - templated for any type T
+template<typename T>
+struct Host1D { 
+    std::vector<T> v; 
+    int N = 0; 
+    IndexSpace space = IndexSpace::None; 
+    using value_type = T;  // for template metaprogramming
+};
+
+template<typename T>
+struct Host2D { 
+    std::vector<T> x, y; 
+    int N = 0; 
+    IndexSpace space = IndexSpace::None; 
+    using value_type = T;  // for template metaprogramming
+};
+
+// Variant types for heterogeneous Host storage
+using HostVariant1D = std::variant<
+    Host1D<float>, Host1D<double>, Host1D<int>,
+    Host1D<unsigned int>, Host1D<long>, Host1D<unsigned long long>,
+    Host1D<unsigned char>
+>;
+
+using HostVariant2D = std::variant<
+    Host2D<float>, Host2D<double>, Host2D<int>,
+    Host2D<unsigned int>, Host2D<long>, Host2D<unsigned long long>,
+    Host2D<unsigned char>
+>;
 
 // Cached dataset entry (one per field)
 struct DsetCacheEntry {
@@ -65,8 +122,8 @@ enum class TaskKind { Trajectory, Restart, FinalInit, FinalEnd };
 struct SaveTask {
     TaskKind kind;
     int step = -1; // for trajectory/restart labeling
-    std::map<std::string, Host1D> one_d;
-    std::map<std::string, Host2D> two_d;
+    std::map<std::string, HostVariant1D> one_d;  // now stores type variants
+    std::map<std::string, HostVariant2D> two_d;  // now stores type variants
     // inverse maps for reindexing
     bool have_inv_particles = false;
     bool have_inv_vertices = false;
@@ -80,11 +137,10 @@ template<class ParticleType>
 class OutputManager {
 public:
     OutputManager(ParticleType& particles,
-                  const std::string& meta_path,
-                  const std::string& traj_path,
+                  const std::string& path,
                   int max_workers = 1,
                   bool append_mode = false)
-    : particles_(particles), meta_path_(meta_path), traj_path_(traj_path),
+    : particles_(particles), path_(path),
       max_workers_(max_workers), append_mode_(append_mode) {}
 
     // Policy configuration
@@ -108,6 +164,8 @@ public:
 
     // Lifecycle
     void initialize() {
+        meta_path_ = path_ + "/meta.h5";
+        traj_path_ = path_ + "/trajectory.h5";
         // Create parent directories if needed
         if (enable_meta_) {
             std::filesystem::path parent_path = std::filesystem::path(meta_path_).parent_path();
@@ -186,8 +244,9 @@ public:
                               ? H5Gopen(meta_file_, "static", H5P_DEFAULT)
                               : H5Gcreate2(meta_file_, "static", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
                     if (g >= 0) {
-                        // Tag class name
+                        // Tag class name as attribute and standalone dataset for easier discovery
                         h5_write_attr_string(g, "class_name", particles_.get_class_name());
+                        write_scalar<std::string>(g, "class_name", particles_.get_class_name());
                         // Snapshot and write static fields
                         SaveTask t; t.kind = TaskKind::FinalInit; capture_registry_to_host(reg, static_names, t);
                         write_host_maps_to_group(g, t);
@@ -214,6 +273,7 @@ public:
                     hid_t g = H5Gopen(meta_file_, "static", H5P_DEFAULT);
                     if (g >= 0) {
                         h5_write_attr_string(g, "class_name", particles_.get_class_name());
+                        write_scalar<std::string>(g, "class_name", particles_.get_class_name());
                         H5Gclose(g);
                     }
                 }
@@ -285,8 +345,9 @@ public:
                 SaveTask t; t.kind = TaskKind::FinalEnd; t.step = current_step_; capture_registry_to_host(reg, names, t);
                 // synchronous write to /final using same path as write_final_extras
                 std::lock_guard<std::mutex> lk(h5_mtx_);
-                hid_t g = H5Gopen(meta_file_, "final", H5P_DEFAULT);
-                if (g < 0) g = H5Gcreate2(meta_file_, "final", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+                hid_t g = h5_link_exists(meta_file_, "/final")
+                          ? H5Gopen(meta_file_, "final", H5P_DEFAULT)
+                          : H5Gcreate2(meta_file_, "final", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
                 if (g >= 0) { write_host_maps_to_group(g, t); H5Gclose(g); H5Fflush(meta_file_, H5F_SCOPE_GLOBAL); }
             }
         }
@@ -307,6 +368,7 @@ public:
 private:
     // Particle and files
     ParticleType& particles_;
+    std::string path_;
     std::string meta_path_;
     std::string traj_path_;
     hid_t meta_file_ = -1;
@@ -382,47 +444,66 @@ private:
             auto it = reg.fields.find(name);
             if (it == reg.fields.end()) continue;
             const FieldDesc& fd = it->second;
+            
             if (fd.dim == Dimensionality::D1) {
-                if (fd.p1d.ensure_ready) fd.p1d.ensure_ready();
-                df::DeviceField1D<double>* dev = fd.p1d.get_device ? fd.p1d.get_device() : nullptr;
-                if (!dev || dev->size() == 0) continue;
-                Host1D hb; hb.N = dev->size(); hb.space = fd.index_space; hb.v.resize(static_cast<std::size_t>(hb.N));
-                dev->to_host(hb.v); // blocking; sim-safe (same stream)
-                apply_inverse(hb, out);
-                bytes += hb.v.size() * sizeof(double);
-                out.one_d.emplace(name, std::move(hb));
+                // Use std::visit to handle different types at runtime
+                std::visit([&](const auto& provider) {
+                    using T = typename std::decay_t<decltype(provider)>::value_type;
+                    if (provider.ensure_ready) provider.ensure_ready();
+                    auto* dev = provider.get_device ? provider.get_device() : nullptr;
+                    if (!dev || dev->size() == 0) return;
+                    
+                    Host1D<T> hb; 
+                    hb.N = dev->size(); 
+                    hb.space = fd.index_space; 
+                    hb.v.resize(static_cast<std::size_t>(hb.N));
+                    dev->to_host(hb.v); // blocking; sim-safe (same stream)
+                    apply_inverse(hb, out);
+                    bytes += hb.v.size() * sizeof(T);
+                    out.one_d.emplace(name, HostVariant1D{std::move(hb)});
+                }, fd.p1d_variant);
             } else {
-                if (fd.p2d.ensure_ready) fd.p2d.ensure_ready();
-                df::DeviceField2D<double>* dev = fd.p2d.get_device ? fd.p2d.get_device() : nullptr;
-                if (!dev || dev->size() == 0) continue;
-                Host2D hb; hb.N = dev->size(); hb.space = fd.index_space; dev->to_host(hb.x, hb.y);
-                apply_inverse(hb, out);
-                bytes += (hb.x.size() + hb.y.size()) * sizeof(double);
-                out.two_d.emplace(name, std::move(hb));
+                // Handle 2D fields similarly
+                std::visit([&](const auto& provider) {
+                    using T = typename std::decay_t<decltype(provider)>::value_type;
+                    if (provider.ensure_ready) provider.ensure_ready();
+                    auto* dev = provider.get_device ? provider.get_device() : nullptr;
+                    if (!dev || dev->size() == 0) return;
+                    
+                    Host2D<T> hb; 
+                    hb.N = dev->size(); 
+                    hb.space = fd.index_space; 
+                    dev->to_host(hb.x, hb.y);
+                    apply_inverse(hb, out);
+                    bytes += (hb.x.size() + hb.y.size()) * sizeof(T);
+                    out.two_d.emplace(name, HostVariant2D{std::move(hb)});
+                }, fd.p2d_variant);
             }
         }
         out.bytes = bytes;
     }
 
-    static void apply_inverse(Host1D& hb, const SaveTask& t) {
+    template<typename T>
+    static void apply_inverse(Host1D<T>& hb, const SaveTask& t) {
         if (hb.space == IndexSpace::Particle && t.have_inv_particles && static_cast<int>(t.inv_particles.size()) == hb.N) {
-            std::vector<double> out(static_cast<std::size_t>(hb.N));
+            std::vector<T> out(static_cast<std::size_t>(hb.N));
             for (int i=0;i<hb.N;++i) out[static_cast<std::size_t>(t.inv_particles[i])] = hb.v[static_cast<std::size_t>(i)];
             hb.v.swap(out);
         } else if (hb.space == IndexSpace::Vertex && t.have_inv_vertices && static_cast<int>(t.inv_vertices.size()) == hb.N) {
-            std::vector<double> out(static_cast<std::size_t>(hb.N));
+            std::vector<T> out(static_cast<std::size_t>(hb.N));
             for (int i=0;i<hb.N;++i) out[static_cast<std::size_t>(t.inv_vertices[i])] = hb.v[static_cast<std::size_t>(i)];
             hb.v.swap(out);
         }
     }
 
-    static void apply_inverse(Host2D& hb, const SaveTask& t) {
+    template<typename T>
+    static void apply_inverse(Host2D<T>& hb, const SaveTask& t) {
         if (hb.space == IndexSpace::Particle && t.have_inv_particles && static_cast<int>(t.inv_particles.size()) == hb.N) {
-            std::vector<double> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
+            std::vector<T> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
             for (int i=0;i<hb.N;++i) { int o=t.inv_particles[i]; rx[static_cast<std::size_t>(o)] = hb.x[static_cast<std::size_t>(i)]; ry[static_cast<std::size_t>(o)] = hb.y[static_cast<std::size_t>(i)]; }
             hb.x.swap(rx); hb.y.swap(ry);
         } else if (hb.space == IndexSpace::Vertex && t.have_inv_vertices && static_cast<int>(t.inv_vertices.size()) == hb.N) {
-            std::vector<double> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
+            std::vector<T> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
             for (int i=0;i<hb.N;++i) { int o=t.inv_vertices[i]; rx[static_cast<std::size_t>(o)] = hb.x[static_cast<std::size_t>(i)]; ry[static_cast<std::size_t>(o)] = hb.y[static_cast<std::size_t>(i)]; }
             hb.x.swap(rx); hb.y.swap(ry);
         }
@@ -578,33 +659,41 @@ private:
         }
 
         for (const auto& kv : t.one_d) {
-            const std::string& name = kv.first; const Host1D& hb = kv.second; hsize_t N = static_cast<hsize_t>(hb.N);
-            ensure_traj_dataset_locked(name, Dimensionality::D1, N);
-            auto& e = traj_cache_[name];
-            // Align cursor with timestep
-            if (e.cursor_T != timestep_cache_.cursor_T) e.cursor_T = timestep_cache_.cursor_T;
-            if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
-            hid_t fs = H5Dget_space(e.dset); hsize_t start[2] = {e.cursor_T, 0}; hsize_t cnt[2] = {1, N};
-            H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
-            hid_t ms = H5Screate_simple(2, cnt, nullptr);
-            H5Dwrite(e.dset, H5T_NATIVE_DOUBLE, ms, fs, H5P_DEFAULT, hb.v.data());
-            H5Sclose(ms); H5Sclose(fs);
-            e.cursor_T += 1;
+            const std::string& name = kv.first;
+            std::visit([&](const auto& hb) {
+                using T = typename std::decay_t<decltype(hb)>::value_type;
+                hsize_t N = static_cast<hsize_t>(hb.N);
+                ensure_traj_dataset_locked(name, Dimensionality::D1, N);
+                auto& e = traj_cache_[name];
+                // Align cursor with timestep
+                if (e.cursor_T != timestep_cache_.cursor_T) e.cursor_T = timestep_cache_.cursor_T;
+                if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
+                hid_t fs = H5Dget_space(e.dset); hsize_t start[2] = {e.cursor_T, 0}; hsize_t cnt[2] = {1, N};
+                H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
+                hid_t ms = H5Screate_simple(2, cnt, nullptr);
+                H5Dwrite(e.dset, h5_native<T>(), ms, fs, H5P_DEFAULT, hb.v.data());
+                H5Sclose(ms); H5Sclose(fs);
+                e.cursor_T += 1;
+            }, kv.second);
         }
         for (const auto& kv : t.two_d) {
-            const std::string& name = kv.first; const Host2D& hb = kv.second; hsize_t N = static_cast<hsize_t>(hb.N);
-            ensure_traj_dataset_locked(name, Dimensionality::D2, N);
-            auto& e = traj_cache_[name];
-            if (e.cursor_T != timestep_cache_.cursor_T) e.cursor_T = timestep_cache_.cursor_T;
-            if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
-            hid_t fs = H5Dget_space(e.dset); hsize_t start[3] = {e.cursor_T, 0, 0}; hsize_t cnt[3] = {1, N, 2};
-            H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
-            hid_t ms = H5Screate_simple(3, cnt, nullptr);
-            std::vector<double> inter(static_cast<std::size_t>(hb.N) * 2);
-            for (int i=0;i<hb.N;++i) { inter[2*i+0]=hb.x[static_cast<std::size_t>(i)]; inter[2*i+1]=hb.y[static_cast<std::size_t>(i)]; }
-            H5Dwrite(e.dset, H5T_NATIVE_DOUBLE, ms, fs, H5P_DEFAULT, inter.data());
-            H5Sclose(ms); H5Sclose(fs);
-            e.cursor_T += 1;
+            const std::string& name = kv.first;
+            std::visit([&](const auto& hb) {
+                using T = typename std::decay_t<decltype(hb)>::value_type;
+                hsize_t N = static_cast<hsize_t>(hb.N);
+                ensure_traj_dataset_locked(name, Dimensionality::D2, N);
+                auto& e = traj_cache_[name];
+                if (e.cursor_T != timestep_cache_.cursor_T) e.cursor_T = timestep_cache_.cursor_T;
+                if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
+                hid_t fs = H5Dget_space(e.dset); hsize_t start[3] = {e.cursor_T, 0, 0}; hsize_t cnt[3] = {1, N, 2};
+                H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
+                hid_t ms = H5Screate_simple(3, cnt, nullptr);
+                std::vector<T> inter(static_cast<std::size_t>(hb.N) * 2);
+                for (int i=0;i<hb.N;++i) { inter[2*i+0]=hb.x[static_cast<std::size_t>(i)]; inter[2*i+1]=hb.y[static_cast<std::size_t>(i)]; }
+                H5Dwrite(e.dset, h5_native<T>(), ms, fs, H5P_DEFAULT, inter.data());
+                H5Sclose(ms); H5Sclose(fs);
+                e.cursor_T += 1;
+            }, kv.second);
         }
     }
 
@@ -649,13 +738,21 @@ private:
         for (auto& kv : reg.fields) {
             const std::string& name = kv.first; const FieldDesc& fd = kv.second;
             if (fd.dim == Dimensionality::D1) {
-                if (fd.p1d.get_device) {
-                    auto* dev = fd.p1d.get_device(); if (!dev) continue; ensure_traj_dataset_locked(name, Dimensionality::D1, static_cast<hsize_t>(dev->size()));
-                }
+                std::visit([&](const auto& provider) {
+                    if (provider.get_device) {
+                        auto* dev = provider.get_device(); 
+                        if (!dev) return; 
+                        ensure_traj_dataset_locked(name, Dimensionality::D1, static_cast<hsize_t>(dev->size()));
+                    }
+                }, fd.p1d_variant);
             } else {
-                if (fd.p2d.get_device) {
-                    auto* dev = fd.p2d.get_device(); if (!dev) continue; ensure_traj_dataset_locked(name, Dimensionality::D2, static_cast<hsize_t>(dev->size()));
-                }
+                std::visit([&](const auto& provider) {
+                    if (provider.get_device) {
+                        auto* dev = provider.get_device(); 
+                        if (!dev) return; 
+                        ensure_traj_dataset_locked(name, Dimensionality::D2, static_cast<hsize_t>(dev->size()));
+                    }
+                }, fd.p2d_variant);
             }
         }
         // Shrink all cached datasets
@@ -688,16 +785,29 @@ private:
 
     void write_final_extras(const SaveTask& t) {
         std::lock_guard<std::mutex> lk(h5_mtx_);
-        hid_t g = H5Gopen(meta_file_, "final", H5P_DEFAULT);
-        if (g < 0) g = H5Gcreate2(meta_file_, "final", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        hid_t g = h5_link_exists(meta_file_, "/final")
+                  ? H5Gopen(meta_file_, "final", H5P_DEFAULT)
+                  : H5Gcreate2(meta_file_, "final", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         write_host_maps_to_group(g, t);
         H5Gclose(g);
         H5Fflush(meta_file_, H5F_SCOPE_GLOBAL);
     }
 
     static void write_host_maps_to_group(hid_t group, const SaveTask& t) {
-        for (const auto& kv : t.one_d) write_vector<double>(group, kv.first, kv.second.v);
-        for (const auto& kv : t.two_d) write_vector_2d<double>(group, kv.first, kv.second.x, kv.second.y);
+        // Use std::visit to dispatch on the actual type stored in the variant
+        for (const auto& kv : t.one_d) {
+            std::visit([&](const auto& host_data) {
+                using T = typename std::decay_t<decltype(host_data)>::value_type;
+                write_vector<T>(group, kv.first, host_data.v);
+            }, kv.second);
+        }
+        
+        for (const auto& kv : t.two_d) {
+            std::visit([&](const auto& host_data) {
+                using T = typename std::decay_t<decltype(host_data)>::value_type;
+                write_vector_2d<T>(group, kv.first, host_data.x, host_data.y);
+            }, kv.second);
+        }
     }
 
     // Optional particle save helpers (SFINAE-guarded)
@@ -726,12 +836,16 @@ private:
         std::vector<Col> cols;
         cols.push_back({"step", std::to_string(step)});
         for (const auto& kv : t.one_d) {
-            const std::string& name = kv.first; const Host1D& hb = kv.second;
-            if (hb.space == IndexSpace::System && !hb.v.empty()) {
-                double s = 0.0; for (double x : hb.v) s += x; double avg = s / static_cast<double>(hb.v.size());
-                char buf[64]; std::snprintf(buf, sizeof(buf), "%.6g", avg);
-                cols.push_back({name, std::string(buf)});
-            }
+            const std::string& name = kv.first;
+            std::visit([&](const auto& hb) {
+                if (hb.space == IndexSpace::System && !hb.v.empty()) {
+                    double s = 0.0; 
+                    for (auto x : hb.v) s += static_cast<double>(x); 
+                    double avg = s / static_cast<double>(hb.v.size());
+                    char buf[64]; std::snprintf(buf, sizeof(buf), "%.6g", avg);
+                    cols.push_back({name, std::string(buf)});
+                }
+            }, kv.second);
         }
         // Format columns with padding and separators
         std::vector<std::size_t> widths; widths.reserve(cols.size());

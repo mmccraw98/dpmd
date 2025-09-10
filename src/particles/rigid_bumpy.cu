@@ -952,52 +952,60 @@ std::vector<std::string> RigidBumpy::get_state_field_names_poly_extras_impl() {
 void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg) {
     // Register rigid bumpy specific fields
     {
-        io::Provider1D p; p.ensure_ready = [this]{};
+        io::Provider1D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->mass; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["mass"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        reg.fields["mass"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
     }
     {
-        io::Provider1D p; p.ensure_ready = [this]{};
+        io::Provider1D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->moment_inertia; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["moment_inertia"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        reg.fields["moment_inertia"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
     }
     {
-        io::Provider2D p; p.ensure_ready = [this]{};
+        io::Provider2D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->pos; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["pos"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        reg.fields["pos"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Particle, p);
     }
     {
-        io::Provider2D p; p.ensure_ready = [this]{};
+        io::Provider2D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->vel; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["vel"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        reg.fields["vel"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Particle, p);
     }
     {
-        io::Provider2D p; p.ensure_ready = [this]{};
+        io::Provider2D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->force; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["force"] = io::FieldDesc{ io::Dimensionality::D2, io::IndexSpace::Particle, {}, p };
+        reg.fields["force"] = io::FieldDesc(io::Dimensionality::D2, io::IndexSpace::Particle, p);
     }
     {
-        io::Provider1D p; p.ensure_ready = [this]{};
+        io::Provider1D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->angle; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["angle"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        reg.fields["angle"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
     }
     {
-        io::Provider1D p; p.ensure_ready = [this]{};
+        io::Provider1D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->torque; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["torque"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        reg.fields["torque"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
     }
     {
-        io::Provider1D p; p.ensure_ready = [this]{};
+        io::Provider1D<double> p; 
+        p.ensure_ready = [this]{};
         p.get_device = [this]{ return &this->angular_vel; };
         p.index_space = io::IndexSpace::Particle;
-        reg.fields["angular_vel"] = io::FieldDesc{ io::Dimensionality::D1, io::IndexSpace::Particle, p, {} };
+        reg.fields["angular_vel"] = io::FieldDesc(io::Dimensionality::D1, io::IndexSpace::Particle, p);
     }
 }
 

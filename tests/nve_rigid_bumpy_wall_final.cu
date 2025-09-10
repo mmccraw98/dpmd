@@ -32,8 +32,7 @@ int main(int argc, char** argv) {
     md::integrators::VelocityVerletWall vvw(P, dt);
     vvw.init();
 
-    // need to just pass the path and then derive the meta and trajectory paths
-    io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path + "/meta.h5", out_path + "/trajectory.h5", 1, false);
+    io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 1, false);
     om.set_trajectory_fields({"pos", "angle", "pe"});
     om.set_trajectory_interval(100);
     om.initialize();
