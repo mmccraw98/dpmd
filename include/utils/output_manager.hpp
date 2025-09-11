@@ -20,62 +20,40 @@
 
 namespace io {      
 
-// Which index space this field belongs to
-enum class IndexSpace { Particle, Vertex, System, None };
+// Dimensionality for trajectory dataset management
 enum class Dimensionality { D1, D2 };
 
-// Provider (no virtuals; store lambdas/struct functors) - templated for any type T
+// Unified FieldSpec objects (replace Provider + FieldDesc)
 template<typename T>
-struct Provider1D {
-    std::function<void()> ensure_ready;                    // launch any prerequisites on the simulation stream
-    std::function<df::DeviceField1D<T>*()> get_device;    // stable pointer to data (or staging)  
-    IndexSpace index_space = IndexSpace::Particle;
+struct FieldSpec1D {
+    // Optional pre-processing before capture (compute/prepare on device)
+    std::function<void()> preprocess;
+    // Must return a stable pointer to the device field to capture
+    std::function<df::DeviceField1D<T>*()> get_device_field;
+    // Optional: name of inverse index field to apply after capture
+    std::function<std::string()> index_by; // may be empty
     using value_type = T;  // for template metaprogramming
 };
 
 template<typename T>
-struct Provider2D {
-    std::function<void()> ensure_ready;
-    std::function<df::DeviceField2D<T>*()> get_device;
-    IndexSpace index_space = IndexSpace::Particle;
+struct FieldSpec2D {
+    std::function<void()> preprocess;
+    std::function<df::DeviceField2D<T>*()> get_device_field;
+    std::function<std::string()> index_by; // applies to first dimension length
     using value_type = T;  // for template metaprogramming
 };
 
-// Variant types for heterogeneous Provider storage (matching DeviceField type instantiations)
-using ProviderVariant1D = std::variant<
-    Provider1D<float>, Provider1D<double>, Provider1D<int>,
-    Provider1D<unsigned int>, Provider1D<long>, Provider1D<unsigned long long>,
-    Provider1D<unsigned char>
+using FieldSpecVariant = std::variant<
+    FieldSpec1D<float>, FieldSpec1D<double>, FieldSpec1D<int>,
+    FieldSpec1D<unsigned int>, FieldSpec1D<long>, FieldSpec1D<unsigned long long>,
+    FieldSpec1D<unsigned char>,
+    FieldSpec2D<float>, FieldSpec2D<double>, FieldSpec2D<int>,
+    FieldSpec2D<unsigned int>, FieldSpec2D<long>, FieldSpec2D<unsigned long long>,
+    FieldSpec2D<unsigned char>
 >;
-
-using ProviderVariant2D = std::variant<
-    Provider2D<float>, Provider2D<double>, Provider2D<int>,
-    Provider2D<unsigned int>, Provider2D<long>, Provider2D<unsigned long long>,
-    Provider2D<unsigned char>
->;
-
-struct FieldDesc {
-    Dimensionality dim;
-    IndexSpace index_space;
-    std::type_index type_info;        // runtime type identification
-    ProviderVariant1D p1d_variant;    // used if dim == D1
-    ProviderVariant2D p2d_variant;    // used if dim == D2
-    
-    // Default constructor for std::map usage
-    FieldDesc() : dim(Dimensionality::D1), index_space(IndexSpace::None), type_info(std::type_index(typeid(void))) {}
-    
-    // Constructor to initialize type_info properly
-    template<typename T>
-    FieldDesc(Dimensionality d, IndexSpace space, Provider1D<T> p1d) 
-        : dim(d), index_space(space), type_info(std::type_index(typeid(T))), p1d_variant(std::move(p1d)) {}
-    
-    template<typename T>
-    FieldDesc(Dimensionality d, IndexSpace space, Provider2D<T> p2d)
-        : dim(d), index_space(space), type_info(std::type_index(typeid(T))), p2d_variant(std::move(p2d)) {}
-};
 
 struct OutputRegistry {
-    std::map<std::string, FieldDesc> fields; // name -> descriptor
+    std::map<std::string, FieldSpecVariant> fields; // name -> field spec
 };
 
 // Host buffers - templated for any type T
@@ -83,7 +61,6 @@ template<typename T>
 struct Host1D { 
     std::vector<T> v; 
     int N = 0; 
-    IndexSpace space = IndexSpace::None; 
     using value_type = T;  // for template metaprogramming
 };
 
@@ -91,7 +68,6 @@ template<typename T>
 struct Host2D { 
     std::vector<T> x, y; 
     int N = 0; 
-    IndexSpace space = IndexSpace::None; 
     using value_type = T;  // for template metaprogramming
 };
 
@@ -124,11 +100,8 @@ struct SaveTask {
     int step = -1; // for trajectory/restart labeling
     std::map<std::string, HostVariant1D> one_d;  // now stores type variants
     std::map<std::string, HostVariant2D> two_d;  // now stores type variants
-    // inverse maps for reindexing
-    bool have_inv_particles = false;
-    bool have_inv_vertices = false;
-    std::vector<int> inv_particles; // new->orig
-    std::vector<int> inv_vertices;  // new->orig
+    // cached inverse index arrays captured during this snapshot (by field name)
+    std::map<std::string, std::vector<int>> index_cache;
     // backpressure accounting
     std::size_t bytes = 0;
 };
@@ -166,6 +139,8 @@ public:
     void initialize() {
         meta_path_ = path_ + "/meta.h5";
         traj_path_ = path_ + "/trajectory.h5";
+        // Decide whether to perform reindexing based on neighbor method
+        enable_reindex_ = (particles_.neighbor_method_to_string() == "Cell");
         // Create parent directories if needed
         if (enable_meta_) {
             std::filesystem::path parent_path = std::filesystem::path(meta_path_).parent_path();
@@ -420,16 +395,14 @@ private:
     std::atomic<bool> shutting_down_{false};
     std::size_t bytes_in_flight_ = 0;
 
+    // Reindex policy derived at initialization from particle neighbor method
+    bool enable_reindex_ = true;
+
     // ---- registry building (SFINAE to keep CRTP clean) ----
     template<class T=ParticleType>
     static auto has_build_registry_impl(int) -> decltype(std::declval<T&>().output_build_registry(std::declval<OutputRegistry&>()), std::true_type{});
     template<class>
     static std::false_type has_build_registry_impl(...);
-
-    template<class T=ParticleType>
-    static auto has_capture_inv_impl(int) -> decltype(std::declval<T&>().output_capture_inverse_orders(std::declval<std::vector<int>&>(), std::declval<std::vector<int>&>()), std::true_type{});
-    template<class>
-    static std::false_type has_capture_inv_impl(...);
 
     void build_registry_safe(OutputRegistry& reg) {
         if constexpr (decltype(has_build_registry_impl<ParticleType>(0))::value) {
@@ -437,86 +410,101 @@ private:
         }
     }
 
-    void capture_inverse_orders(SaveTask& t) {
-        if constexpr (decltype(has_capture_inv_impl<ParticleType>(0))::value) {
-            particles_.output_capture_inverse_orders(t.inv_particles, t.inv_vertices);
-            t.have_inv_particles = !t.inv_particles.empty();
-            t.have_inv_vertices  = !t.inv_vertices.empty();
-        }
-    }
-
     // ---- snapshot and reindex (same-stream D2H) ----
     void capture_registry_to_host(const OutputRegistry& reg, const std::vector<std::string>& names, SaveTask& out) {
-        capture_inverse_orders(out);
         std::size_t bytes = 0;
         for (const auto& name : names) {
             auto it = reg.fields.find(name);
             if (it == reg.fields.end()) continue;
-            const FieldDesc& fd = it->second;
-            
-            if (fd.dim == Dimensionality::D1) {
-                // Use std::visit to handle different types at runtime
-                std::visit([&](const auto& provider) {
-                    using T = typename std::decay_t<decltype(provider)>::value_type;
-                    if (provider.ensure_ready) provider.ensure_ready();
-                    auto* dev = provider.get_device ? provider.get_device() : nullptr;
-                    if (!dev || dev->size() == 0) return;
-                    
-                    Host1D<T> hb; 
-                    hb.N = dev->size(); 
-                    hb.space = fd.index_space; 
-                    hb.v.resize(static_cast<std::size_t>(hb.N));
-                    dev->to_host(hb.v); // blocking; sim-safe (same stream)
-                    apply_inverse(hb, out);
+            const FieldSpecVariant& spec = it->second;
+            std::visit([&](const auto& s) {
+                using SpecT = std::decay_t<decltype(s)>;
+                using T = typename SpecT::value_type;
+                if (s.preprocess) s.preprocess();
+                auto* dev = s.get_device_field ? s.get_device_field() : nullptr;
+                if (!dev || dev->size() == 0) return;
+                std::string idx_name;
+                if (s.index_by) idx_name = s.index_by();
+                if constexpr (std::is_same_v<SpecT, FieldSpec1D<T>>) {
+                    Host1D<T> hb; hb.N = dev->size(); hb.v.resize(static_cast<std::size_t>(hb.N));
+                    dev->to_host(hb.v);
+                    if (enable_reindex_ && !idx_name.empty() && idx_name != name) {
+                        auto cit = out.index_cache.find(idx_name);
+                        if (cit == out.index_cache.end()) {
+                            auto iit = reg.fields.find(idx_name);
+                            if (iit == reg.fields.end()) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' not found");
+                            bool ok = false;
+                            std::visit([&](const auto& ispec){
+                                using ISpecT = std::decay_t<decltype(ispec)>;
+                                if constexpr (std::is_same_v<ISpecT, FieldSpec1D<int>>) {
+                                    if (ispec.preprocess) ispec.preprocess();
+                                    auto* idev = ispec.get_device_field ? ispec.get_device_field() : nullptr;
+                                    if (!idev) throw std::runtime_error("index field has null device pointer: " + idx_name);
+                                    std::vector<int> inv(static_cast<std::size_t>(idev->size()));
+                                    idev->to_host(inv);
+                                    out.index_cache.emplace(idx_name, std::move(inv));
+                                    ok = true;
+                                }
+                            }, iit->second);
+                            if (!ok) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' must be 1D int");
+                            cit = out.index_cache.find(idx_name);
+                        }
+                        const std::vector<int>& inv = cit->second;
+                        if (static_cast<int>(inv.size()) != hb.N) throw std::runtime_error("capture_registry_to_host: index size mismatch for '" + name + "'");
+                        std::vector<T> re(static_cast<std::size_t>(hb.N));
+                        for (int i=0;i<hb.N;++i) {
+                            int o = inv[static_cast<std::size_t>(i)];
+                            if (o < 0 || o >= hb.N) throw std::runtime_error("capture_registry_to_host: index value out of range for '" + name + "'");
+                            re[static_cast<std::size_t>(o)] = hb.v[static_cast<std::size_t>(i)];
+                        }
+                        hb.v.swap(re);
+                    }
                     bytes += hb.v.size() * sizeof(T);
                     out.one_d.emplace(name, HostVariant1D{std::move(hb)});
-                }, fd.p1d_variant);
-            } else {
-                // Handle 2D fields similarly
-                std::visit([&](const auto& provider) {
-                    using T = typename std::decay_t<decltype(provider)>::value_type;
-                    if (provider.ensure_ready) provider.ensure_ready();
-                    auto* dev = provider.get_device ? provider.get_device() : nullptr;
-                    if (!dev || dev->size() == 0) return;
-                    
-                    Host2D<T> hb; 
-                    hb.N = dev->size(); 
-                    hb.space = fd.index_space; 
+                } else {
+                    Host2D<T> hb; hb.N = dev->size(); hb.x.resize(static_cast<std::size_t>(hb.N)); hb.y.resize(static_cast<std::size_t>(hb.N));
                     dev->to_host(hb.x, hb.y);
-                    apply_inverse(hb, out);
+                    if (enable_reindex_ && !idx_name.empty() && idx_name != name) {
+                        auto cit = out.index_cache.find(idx_name);
+                        if (cit == out.index_cache.end()) {
+                            auto iit = reg.fields.find(idx_name);
+                            if (iit == reg.fields.end()) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' not found");
+                            bool ok = false;
+                            std::visit([&](const auto& ispec){
+                                using ISpecT = std::decay_t<decltype(ispec)>;
+                                if constexpr (std::is_same_v<ISpecT, FieldSpec1D<int>>) {
+                                    if (ispec.preprocess) ispec.preprocess();
+                                    auto* idev = ispec.get_device_field ? ispec.get_device_field() : nullptr;
+                                    if (!idev) throw std::runtime_error("index field has null device pointer: " + idx_name);
+                                    std::vector<int> inv(static_cast<std::size_t>(idev->size()));
+                                    idev->to_host(inv);
+                                    out.index_cache.emplace(idx_name, std::move(inv));
+                                    ok = true;
+                                }
+                            }, iit->second);
+                            if (!ok) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' must be 1D int");
+                            cit = out.index_cache.find(idx_name);
+                        }
+                        const std::vector<int>& inv = cit->second;
+                        if (static_cast<int>(inv.size()) != hb.N) throw std::runtime_error("capture_registry_to_host: index size mismatch for '" + name + "'");
+                        std::vector<T> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
+                        for (int i=0;i<hb.N;++i) {
+                            int o = inv[static_cast<std::size_t>(i)];
+                            if (o < 0 || o >= hb.N) throw std::runtime_error("capture_registry_to_host: index value out of range for '" + name + "'");
+                            rx[static_cast<std::size_t>(o)] = hb.x[static_cast<std::size_t>(i)];
+                            ry[static_cast<std::size_t>(o)] = hb.y[static_cast<std::size_t>(i)];
+                        }
+                        hb.x.swap(rx); hb.y.swap(ry);
+                    }
                     bytes += (hb.x.size() + hb.y.size()) * sizeof(T);
                     out.two_d.emplace(name, HostVariant2D{std::move(hb)});
-                }, fd.p2d_variant);
-            }
+                }
+            }, spec);
         }
         out.bytes = bytes;
     }
 
-    template<typename T>
-    static void apply_inverse(Host1D<T>& hb, const SaveTask& t) {
-        if (hb.space == IndexSpace::Particle && t.have_inv_particles && static_cast<int>(t.inv_particles.size()) == hb.N) {
-            std::vector<T> out(static_cast<std::size_t>(hb.N));
-            for (int i=0;i<hb.N;++i) out[static_cast<std::size_t>(t.inv_particles[i])] = hb.v[static_cast<std::size_t>(i)];
-            hb.v.swap(out);
-        } else if (hb.space == IndexSpace::Vertex && t.have_inv_vertices && static_cast<int>(t.inv_vertices.size()) == hb.N) {
-            std::vector<T> out(static_cast<std::size_t>(hb.N));
-            for (int i=0;i<hb.N;++i) out[static_cast<std::size_t>(t.inv_vertices[i])] = hb.v[static_cast<std::size_t>(i)];
-            hb.v.swap(out);
-        }
-    }
-
-    template<typename T>
-    static void apply_inverse(Host2D<T>& hb, const SaveTask& t) {
-        if (hb.space == IndexSpace::Particle && t.have_inv_particles && static_cast<int>(t.inv_particles.size()) == hb.N) {
-            std::vector<T> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
-            for (int i=0;i<hb.N;++i) { int o=t.inv_particles[i]; rx[static_cast<std::size_t>(o)] = hb.x[static_cast<std::size_t>(i)]; ry[static_cast<std::size_t>(o)] = hb.y[static_cast<std::size_t>(i)]; }
-            hb.x.swap(rx); hb.y.swap(ry);
-        } else if (hb.space == IndexSpace::Vertex && t.have_inv_vertices && static_cast<int>(t.inv_vertices.size()) == hb.N) {
-            std::vector<T> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
-            for (int i=0;i<hb.N;++i) { int o=t.inv_vertices[i]; rx[static_cast<std::size_t>(o)] = hb.x[static_cast<std::size_t>(i)]; ry[static_cast<std::size_t>(o)] = hb.y[static_cast<std::size_t>(i)]; }
-            hb.x.swap(rx); hb.y.swap(ry);
-        }
-    }
+    // (apply_inverse helpers removed; reindexing handled inline via index_by and index_cache)
 
     // ---- worker management with blocking backpressure ----
     void start_workers() {
@@ -745,24 +733,17 @@ private:
         H5Dclose(dset);
         // Initialize caches for registered fields and shrink to keep_T
         for (auto& kv : reg.fields) {
-            const std::string& name = kv.first; const FieldDesc& fd = kv.second;
-            if (fd.dim == Dimensionality::D1) {
-                std::visit([&](const auto& provider) {
-                    if (provider.get_device) {
-                        auto* dev = provider.get_device(); 
-                        if (!dev) return; 
-                        ensure_traj_dataset_locked(name, Dimensionality::D1, static_cast<hsize_t>(dev->size()));
-                    }
-                }, fd.p1d_variant);
-            } else {
-                std::visit([&](const auto& provider) {
-                    if (provider.get_device) {
-                        auto* dev = provider.get_device(); 
-                        if (!dev) return; 
-                        ensure_traj_dataset_locked(name, Dimensionality::D2, static_cast<hsize_t>(dev->size()));
-                    }
-                }, fd.p2d_variant);
-            }
+            const std::string& name = kv.first; const FieldSpecVariant& spec = kv.second;
+            std::visit([&](const auto& s){
+                auto* dev = s.get_device_field ? s.get_device_field() : nullptr;
+                if (!dev) return; 
+                using SpecT = std::decay_t<decltype(s)>;
+                if constexpr (std::is_same_v<SpecT, FieldSpec1D<typename SpecT::value_type>>) {
+                    ensure_traj_dataset_locked(name, Dimensionality::D1, static_cast<hsize_t>(dev->size()));
+                } else {
+                    ensure_traj_dataset_locked(name, Dimensionality::D2, static_cast<hsize_t>(dev->size()));
+                }
+            }, spec);
         }
         // Shrink all cached datasets
         for (auto& ckv : traj_cache_) {
@@ -851,7 +832,8 @@ private:
         for (const auto& kv : t.one_d) {
             const std::string& name = kv.first;
             std::visit([&](const auto& hb) {
-                if (hb.space == IndexSpace::System && !hb.v.empty()) {
+                // Treat fields sized to number of systems as system-level for console
+                if (!hb.v.empty() && hb.N == particles_.n_systems()) {
                     double s = 0.0; 
                     for (auto x : hb.v) s += static_cast<double>(x); 
                     double avg = s / static_cast<double>(hb.v.size());
