@@ -76,6 +76,15 @@ public:
 
     NeighborMethod get_neighbor_method() const { return neighbor_method; }
 
+    // String representation of neighbor method for I/O
+    std::string neighbor_method_to_string() const {
+        switch (neighbor_method) {
+            case NeighborMethod::Naive: return "Naive";
+            case NeighborMethod::Cell:  return "Cell";
+        }
+        throw std::runtime_error("BaseParticle::neighbor_method_to_string: invalid neighbor method");
+    }
+
     // Load from hdf5
     void load_from_hdf5(std::string path, std::string location) {
         std::string meta_path = path + "/meta.h5";

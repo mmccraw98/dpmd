@@ -113,6 +113,7 @@ set(TEST_SOURCES
     tests/fire_rigid_bumpy_wall.cu
     tests/fire_jam_rigid_bumpy_wall.cu
     tests/nve_rigid_bumpy_wall_final.cu
+    tests/rigid_bumpy_equilibrate_wall.cu
 )
 
 # Create test executables

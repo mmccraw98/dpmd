@@ -946,7 +946,7 @@ std::vector<std::string> RigidBumpy::get_static_field_names_poly_extras_impl() {
 }
 
 std::vector<std::string> RigidBumpy::get_state_field_names_poly_extras_impl() {
-    return {"pos", "vel", "force", "torque", "angular_vel"};
+    return {"pos", "vel", "force", "torque", "angular_vel", "angle"};
 }
 
 void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg) {
