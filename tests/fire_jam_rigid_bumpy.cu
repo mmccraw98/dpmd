@@ -98,7 +98,6 @@ int main(int argc, char** argv) {
     double phi_tolerance = 1e-10;
 
     df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);
-
     md::routines::jam_binary_search_wall(P, dt, n_compression_steps, n_minimization_steps, avg_pe_target, avg_pe_diff_target, phi_increment, phi_tolerance);
 
     hid_t out_file = H5Fcreate(out_path.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);

@@ -23,18 +23,20 @@ int main(int argc, char** argv) {
     md::integrators::VelocityVerletWall vvw(P, dt);
     vvw.init();
 
-    io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 1, false);
+    io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 10, true);
+    om.set_extra_init_fields({"pe_total", "ke_total", "packing_fraction"});
+    om.set_extra_final_fields({"pe_total", "ke_total", "packing_fraction"});
     om.set_trajectory_fields({"pos", "angle", "vertex_pos"});
     om.set_trajectory_interval(100);
     om.initialize();
 
     // TODO: add pre-req calculations
 
-    std::cout << "running for " << n_steps << " steps" << std::endl;
+    std::cout << "Running for " << n_steps << " steps" << std::endl;
     for (int i = 0; i < n_steps; i++) {
         vvw.step();
         om.step(i);
     }
     om.finalize();
-    std::cout << "done" << std::endl;
+    std::cout << "Done" << std::endl;
 }

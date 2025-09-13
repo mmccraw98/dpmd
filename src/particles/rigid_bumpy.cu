@@ -918,6 +918,7 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
 void RigidBumpy::load_static_from_hdf5_poly_extras_impl(hid_t group) {
     this->mass.from_host(read_vector<double>(group, "mass"));
     this->moment_inertia.from_host(read_vector<double>(group, "moment_inertia"));
+    this->area.from_host(read_vector<double>(group, "area"));
 }
 
 void RigidBumpy::load_from_hdf5_poly_extras_impl(hid_t group) {
@@ -942,7 +943,7 @@ std::string RigidBumpy::get_class_name_impl() {
 }
 
 std::vector<std::string> RigidBumpy::get_static_field_names_poly_extras_impl() {
-    return {"mass", "moment_inertia"};
+    return {"mass", "moment_inertia", "area"};
 }
 
 std::vector<std::string> RigidBumpy::get_state_field_names_poly_extras_impl() {

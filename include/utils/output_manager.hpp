@@ -645,14 +645,15 @@ private:
     void write_trajectory(const SaveTask& t) {
         std::lock_guard<std::mutex> lk(h5_mtx_);
         ensure_timestep_locked();
-        if (timestep_cache_.cursor_T + 1 > timestep_cache_.reserved_T) extend_locked(timestep_cache_, static_cast<hsize_t>(preextend_block_));
+        // Use the current row for both timestep and field datasets, then increment cursors at the end
+        hsize_t row = timestep_cache_.cursor_T;
+        if (row + 1 > timestep_cache_.reserved_T) extend_locked(timestep_cache_, static_cast<hsize_t>(preextend_block_));
         {
-            hid_t fs = H5Dget_space(timestep_cache_.dset); hsize_t start[2] = {timestep_cache_.cursor_T, 0}; hsize_t cnt[2] = {1,1};
+            hid_t fs = H5Dget_space(timestep_cache_.dset); hsize_t start[2] = {row, 0}; hsize_t cnt[2] = {1,1};
             H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
             hid_t ms = H5Screate_simple(2, cnt, nullptr);
             int step = t.step; H5Dwrite(timestep_cache_.dset, H5T_NATIVE_INT, ms, fs, H5P_DEFAULT, &step);
             H5Sclose(ms); H5Sclose(fs);
-            timestep_cache_.cursor_T += 1;
         }
 
         for (const auto& kv : t.one_d) {
@@ -662,15 +663,15 @@ private:
                 hsize_t N = static_cast<hsize_t>(hb.N);
                 ensure_traj_dataset_locked(name, Dimensionality::D1, N);
                 auto& e = traj_cache_[name];
-                // Align cursor with timestep
-                if (e.cursor_T != timestep_cache_.cursor_T) e.cursor_T = timestep_cache_.cursor_T;
+                // Align cursor with the chosen row for this write
+                if (e.cursor_T != row) e.cursor_T = row;
                 if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
                 hid_t fs = H5Dget_space(e.dset); hsize_t start[2] = {e.cursor_T, 0}; hsize_t cnt[2] = {1, N};
                 H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
                 hid_t ms = H5Screate_simple(2, cnt, nullptr);
                 H5Dwrite(e.dset, h5_native<T>(), ms, fs, H5P_DEFAULT, hb.v.data());
                 H5Sclose(ms); H5Sclose(fs);
-                e.cursor_T += 1;
+                e.cursor_T = row + 1;
             }, kv.second);
         }
         for (const auto& kv : t.two_d) {
@@ -680,7 +681,7 @@ private:
                 hsize_t N = static_cast<hsize_t>(hb.N);
                 ensure_traj_dataset_locked(name, Dimensionality::D2, N);
                 auto& e = traj_cache_[name];
-                if (e.cursor_T != timestep_cache_.cursor_T) e.cursor_T = timestep_cache_.cursor_T;
+                if (e.cursor_T != row) e.cursor_T = row;
                 if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
                 hid_t fs = H5Dget_space(e.dset); hsize_t start[3] = {e.cursor_T, 0, 0}; hsize_t cnt[3] = {1, N, 2};
                 H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
@@ -689,9 +690,11 @@ private:
                 for (int i=0;i<hb.N;++i) { inter[2*i+0]=hb.x[static_cast<std::size_t>(i)]; inter[2*i+1]=hb.y[static_cast<std::size_t>(i)]; }
                 H5Dwrite(e.dset, h5_native<T>(), ms, fs, H5P_DEFAULT, inter.data());
                 H5Sclose(ms); H5Sclose(fs);
-                e.cursor_T += 1;
+                e.cursor_T = row + 1;
             }, kv.second);
         }
+        // Advance timestep cursor after field writes
+        timestep_cache_.cursor_T = row + 1;
     }
 
     void trim_trajectories_to_restart(OutputRegistry& reg, int restart_step) {
@@ -799,28 +802,6 @@ private:
             }, kv.second);
         }
     }
-
-    // Optional particle save helpers (SFINAE-guarded)
-    // TODO: do we need these anymore?
-    // VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-    template<class T=ParticleType>
-    static auto has_save_static_impl(int) -> decltype(std::declval<T&>().save_static_to_hdf5_group(std::declval<hid_t>()), std::true_type{});
-    template<class>
-    static std::false_type has_save_static_impl(...);
-
-    template<class T=ParticleType>
-    static auto has_save_state_impl(int) -> decltype(std::declval<T&>().save_to_hdf5_group(std::declval<hid_t>()), std::true_type{});
-    template<class>
-    static std::false_type has_save_state_impl(...);
-
-    void call_save_static_safe(hid_t g) {
-        if constexpr (decltype(has_save_static_impl<ParticleType>(0))::value) particles_.save_static_to_hdf5_group(g);
-    }
-    void call_save_state_safe(hid_t g) {
-        if constexpr (decltype(has_save_state_impl<ParticleType>(0))::value) particles_.save_to_hdf5_group(g);
-    }
-    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    // TODO: do we need these anymore?
 
     // Console logger
     void log_console(int step, const SaveTask& t) {

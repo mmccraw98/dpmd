@@ -1,8 +1,3 @@
-// TODO: simplify output manager (refer to comments in base particle class, above the registry definition)
-    - verify that registry is only built when it is determined that it needs to be logged
-
-// TODO: add current timestep to the restart
-
 // TODO: simplify input:
     - should be just one loading function that loads whatever arrays it finds in a given group
     - then, when loading:
@@ -12,6 +7,8 @@
 
 // TODO: add support for different logging schemes (linear, logarithmic)
 // TODO: add energy file
+// TODO: output manager configs
+
 
 // TODO: redesign all data so that it is all saved arbitrarily many times at different timesteps - when you index the data at a given step, each value is defined as its most recent saved state
 // TODO: add center-of-mass velocity cancelling

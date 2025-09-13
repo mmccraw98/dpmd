@@ -209,7 +209,7 @@ public:
  
     // Get the names of the fields that should be saved as static
     std::vector<std::string> get_static_field_names_impl() {
-        std::vector<std::string> static_names {"e_interaction", "mass", "rad"};
+        std::vector<std::string> static_names {"e_interaction", "mass", "rad", "area"};
         std::vector<std::string> derived_names = this->derived().get_static_field_names_point_extras_impl();
         static_names.insert(static_names.end(), derived_names.begin(), derived_names.end());
         return static_names;
