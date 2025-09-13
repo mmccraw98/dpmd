@@ -90,6 +90,9 @@ public:
     // Compute the kinetic energy of each particle
     void compute_ke_impl();
 
+    // Set the number of degrees of freedom for each system
+    void set_n_dof_impl();
+
     // Set random positions within the box with padding defaulting to 0.0 inherited from BaseParticle
     void set_random_positions_impl(double box_pad_x, double box_pad_y);
 

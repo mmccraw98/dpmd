@@ -728,4 +728,9 @@ void Disk::output_build_registry_point_extras_impl(io::OutputRegistry& reg) {
     // nothing extra for disks
 }
 
+void Disk::set_n_dof_impl() {
+    this->n_dof.copy_from(this->system_size);
+    this->n_dof.scale(2);  // 2 translations
+}
+
 } // namespace md::disk

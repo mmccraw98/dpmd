@@ -711,6 +711,11 @@ void RigidBumpy::compute_ke_impl() {
     );
 }
 
+void RigidBumpy::set_n_dof_impl() {
+    this->n_dof.copy_from(this->system_size);
+    this->n_dof.scale(3);  // 2 translations, 1 rotation
+}
+
 void RigidBumpy::allocate_poly_extras_impl(int N) {
     this->torque.resize(N);
     this->angular_vel.resize(N);

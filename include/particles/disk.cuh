@@ -120,6 +120,9 @@ public:
     // Build the output registry
     void output_build_registry_point_extras_impl(io::OutputRegistry& reg);
 
+    // Set the number of degrees of freedom for each system
+    void set_n_dof_impl();
+
 private:
     df::DeviceField2D<double> last_state_pos;
     df::DeviceField1D<double> last_state_rad;

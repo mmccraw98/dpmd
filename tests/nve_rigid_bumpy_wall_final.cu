@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 10, true);
     om.set_extra_init_fields({"pe_total", "ke_total", "packing_fraction"});
     om.set_extra_final_fields({"pe_total", "ke_total", "packing_fraction"});
-    om.set_trajectory_fields({"pos", "angle", "vertex_pos"});
+    om.set_trajectory_fields({"pos", "angle", "ke_total", "pe_total", "temperature"});
     om.set_trajectory_interval(100);
     om.initialize();
 

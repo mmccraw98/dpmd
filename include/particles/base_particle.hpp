@@ -70,6 +70,7 @@ public:
     df::DeviceField1D<double> pe_total;          // (S,) - total potential energy for each system
     df::DeviceField1D<double> ke_total;          // (S,) - total kinetic energy for each system
     df::DeviceField1D<double> fpower_total;      // (S,) - total power for each system (used for the FIRE algorithm)
+    df::DeviceField1D<int> n_dof;             // (S,) - number of degrees of freedom for each system
 
     // Neighbor method
     NeighborMethod neighbor_method = NeighborMethod::Naive;
@@ -294,7 +295,13 @@ public:
         box_size.fill(0.0, 0.0); box_inv.fill(0.0, 0.0); system_size.fill(0); system_offset.fill(0);
         packing_fraction.fill(0.0); pressure.fill(0.0); temperature.fill(0.0); pe_total.fill(0.0); ke_total.fill(0.0);
         verlet_skin.fill(0.0); thresh2.fill(0.0); cub_sys_agg.fill(0);
+        n_dof.resize(S); n_dof.fill(0.0);
         derived().allocate_systems_impl(S);
+    }
+
+    // Set the number of degrees of freedom for each system
+    void set_n_dof() {
+        derived().set_n_dof_impl();
     }
 
     // Bind box data to device memory and calculate its inverse
@@ -520,6 +527,16 @@ public:
             this->system_offset.ptr(),
             this->system_offset.ptr() + 1,
             stream);
+    }
+
+    // Compute the temperature of each system
+    void compute_temperature() {
+        const int S = this->n_systems();
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(S);
+        CUDA_LAUNCH(md::geo::compute_temperature_kernel, G, B,
+            this->ke_total.ptr(), this->n_dof.ptr(), this->temperature.ptr()
+        );
     }
 
     // Compute the total particle area of each system
@@ -810,6 +827,12 @@ public:
             p.get_device_field = [this]{ return &this->ke_total; };
             reg.fields["ke_total"] = p;
         }
+        {
+            FieldSpec1D<double> p; 
+            p.preprocess = [this]{ this->compute_ke_total(); this->compute_temperature(); };
+            p.get_device_field = [this]{ return &this->temperature; };
+            reg.fields["temperature"] = p;
+        }
         // Register the inverse index field itself (1D int) so index_by can find it
         {
             FieldSpec1D<int> p;
@@ -863,6 +886,7 @@ protected:
     std::vector<std::string> get_static_field_names_impl() { return {}; }
     std::vector<std::string> get_state_field_names_impl() { return {}; }
     void output_build_registry_impl(io::OutputRegistry&) {}
+    void set_n_dof_impl() {}
 private:
     int _n_cells;
 };

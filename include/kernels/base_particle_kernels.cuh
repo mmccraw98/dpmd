@@ -94,6 +94,12 @@ __global__ void compute_fractional_packing_fraction_kernel(
     double* __restrict__ packing_fraction_per_particle
 );
 
+__global__ void compute_temperature_kernel(
+    const double* __restrict__ ke_total,
+    const int*    __restrict__ n_dof,
+    double*       __restrict__ temperature
+);
+
 // -----------------------------
 // Geometry helpers (ASAP / __forceinline__)
 // -----------------------------

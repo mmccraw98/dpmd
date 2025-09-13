@@ -111,4 +111,15 @@ __global__ void compute_fractional_packing_fraction_kernel(
     packing_fraction_per_particle[i] = area[i] / box_area;
 }
 
+__global__ void compute_temperature_kernel(
+    const double* __restrict__ ke_total,
+    const int*    __restrict__ n_dof,
+    double*       __restrict__ temperature
+) {
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = g_sys.n_systems;
+    if (s >= S) return;
+    temperature[s] = ke_total[s] * 2.0/ (n_dof[s]);
+}
+
 }} // namespace md::geo
