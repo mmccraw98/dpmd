@@ -7,13 +7,14 @@
 #include "utils/output_manager.hpp"
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " <in_path> <out_path> <n_steps>" << std::endl;
+    if (argc != 5) {
+        std::cerr << "Usage: " << argv[0] << " <in_path> <out_path> <n_steps> <save_increment>" << std::endl;
         return 1;
     }
     std::string in_path = argv[1];
     std::string out_path = argv[2];
     const int n_steps = std::stoi(argv[3]);
+    const int save_increment = std::stoi(argv[4]);
     const double dt_scale = 1e-2;
 
     md::rigid_bumpy::RigidBumpy P;
@@ -26,8 +27,8 @@ int main(int argc, char** argv) {
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 10, true);
     om.set_extra_init_fields({"pe_total", "ke_total", "packing_fraction"});
     om.set_extra_final_fields({"pe_total", "ke_total", "packing_fraction"});
-    om.set_trajectory_fields({"pos", "angle", "ke_total", "pe_total", "temperature"});
-    om.set_trajectory_interval(100);
+    om.set_trajectory_fields({"pos", "angle", "ke_total", "pe_total", "temperature", "vel", "angular_vel"});
+    om.set_trajectory_interval(save_increment);
     om.initialize();
 
     // TODO: add pre-req calculations

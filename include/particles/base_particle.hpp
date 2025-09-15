@@ -128,6 +128,7 @@ public:
         sync_cells();
         sync_class_constants();
         init_neighbors();
+        set_n_dof();
     }
 
     // Load static data and initialize the particle using a specified group from the hdf5 file

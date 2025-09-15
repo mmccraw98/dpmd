@@ -119,7 +119,7 @@ __global__ void compute_temperature_kernel(
     int s = blockIdx.x * blockDim.x + threadIdx.x;
     const int S = g_sys.n_systems;
     if (s >= S) return;
-    temperature[s] = ke_total[s] * 2.0/ (n_dof[s]);
+    temperature[s] = ke_total[s] * 2.0 / (n_dof[s]);
 }
 
 }} // namespace md::geo

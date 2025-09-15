@@ -591,6 +591,22 @@ __global__ void restore_system_state_kernel(
     }
 }
 
+__global__ void set_n_dof_kernel(int* __restrict__ n_dof, const double* __restrict__ moment_inertia) {
+    const int sid = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = md::geo::g_sys.n_systems;
+    if (sid >= S) return;
+    const int beg = md::geo::g_sys.offset[sid];
+    const int end = md::geo::g_sys.offset[sid+1];
+    int n_dof_sum = 0;
+    for (int i = beg; i < end; i++) {
+        n_dof_sum += 2;
+        if (moment_inertia[i] > 0.0) {
+            n_dof_sum += 1;
+        }
+    }
+    n_dof[sid] = n_dof_sum;
+}
+
 
 } // namespace kernels
 
@@ -712,8 +728,11 @@ void RigidBumpy::compute_ke_impl() {
 }
 
 void RigidBumpy::set_n_dof_impl() {
-    this->n_dof.copy_from(this->system_size);
-    this->n_dof.scale(3);  // 2 translations, 1 rotation
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(this->n_systems());
+    CUDA_LAUNCH(kernels::set_n_dof_kernel, G, B,
+        this->n_dof.ptr(), this->moment_inertia.ptr()
+    );
 }
 
 void RigidBumpy::allocate_poly_extras_impl(int N) {

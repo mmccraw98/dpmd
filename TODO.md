@@ -9,6 +9,8 @@
 // TODO: add energy file
 // TODO: output manager configs
 
+// TODO: define units
+
 
 // TODO: redesign all data so that it is all saved arbitrarily many times at different timesteps - when you index the data at a given step, each value is defined as its most recent saved state
 // TODO: add center-of-mass velocity cancelling
