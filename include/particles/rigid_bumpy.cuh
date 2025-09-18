@@ -96,6 +96,9 @@ public:
     // Set random positions within the box with padding defaulting to 0.0 inherited from BaseParticle
     void set_random_positions_impl(double box_pad_x, double box_pad_y);
 
+    // Set random positions of particles within their domains
+    void set_random_positions_in_domains_impl();
+
     // Compute the total power for each system
     void compute_fpower_total_impl();
 

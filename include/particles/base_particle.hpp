@@ -70,7 +70,14 @@ public:
     df::DeviceField1D<double> pe_total;          // (S,) - total potential energy for each system
     df::DeviceField1D<double> ke_total;          // (S,) - total kinetic energy for each system
     df::DeviceField1D<double> fpower_total;      // (S,) - total power for each system (used for the FIRE algorithm)
-    df::DeviceField1D<int> n_dof;             // (S,) - number of degrees of freedom for each system
+    df::DeviceField1D<int> n_dof;                // (S,) - number of degrees of freedom for each system
+
+    // Domain sampling fields
+    df::DeviceField2D<double> domain_pos;             // (N_domain_vertices,2) - position of the domain
+    df::DeviceField1D<double> domain_fractional_area; // (N_domain_vertices,) - fractional area of the domain
+    df::DeviceField2D<double> domain_centroid;        // (N_domains,2) - centroid of the domain
+    df::DeviceField1D<int> domain_offset;          // (N_domains+1,) - offset of the domain
+    df::DeviceField1D<int> domain_particle_id;        // (N_domains,) - id of particle in the domain
 
     // Neighbor method
     NeighborMethod neighbor_method = NeighborMethod::Naive;
@@ -87,7 +94,7 @@ public:
     }
 
     // Load from hdf5
-    void load_from_hdf5(std::string path, std::string location) {
+    void load_from_hdf5(std::string path, std::string location, std::vector<std::string> optional_loading = {}) {
         std::string meta_path = path + "/meta.h5";
         // check if the meta file exists
         if (!std::filesystem::exists(meta_path)) {
@@ -102,6 +109,7 @@ public:
         // load static
         hid_t static_group = H5Gopen(meta_file, "static", H5P_DEFAULT);
         load_static_from_hdf5_group(static_group);  // load everything that is required
+        load_optional_from_hdf5_group(static_group, optional_loading);  // load any one-offs
         H5Gclose(static_group);
         
         // location: init, final, restart
@@ -170,6 +178,21 @@ public:
 
         // run the impl for class-specific static loading
         derived().load_static_from_hdf5_group_impl(group);
+    }
+
+    // If there are any one-off, weird sets of fields that need to be loaded, this is the place to do it
+    void load_optional_from_hdf5_group(hid_t group, std::vector<std::string> optional_loading) {
+        for (const std::string& loading_scheme : optional_loading) {
+            if (loading_scheme == "domain") {
+                domain_pos.from_host(read_vector_2d<double>(group, "domain_pos"));
+                domain_centroid.from_host(read_vector_2d<double>(group, "domain_centroid"));
+                domain_fractional_area.from_host(read_vector<double>(group, "domain_fractional_area"));
+                domain_offset.from_host(read_vector<int>(group, "domain_offset"));
+                domain_particle_id.from_host(read_vector<int>(group, "domain_particle_id"));
+            } else {
+                throw std::runtime_error("BaseParticle::load_optional_from_hdf5_group: invalid loading scheme");
+            }
+        }
     }
 
     // Load from group within hdf5
@@ -346,6 +369,9 @@ public:
 
     // Set random positions within the box with padding defaulting to 0.0
     void set_random_positions(double box_pad_x=0.0, double box_pad_y=0.0) { derived().set_random_positions_impl(box_pad_x, box_pad_y); }
+
+    // Set random positions of particles within their domains
+    void set_random_positions_in_domains() { derived().set_random_positions_in_domains_impl(); }
 
     // Compute pairwise forces (zeros out force and potential energy initially)
     void compute_forces()    { derived().compute_forces_impl(); }
@@ -878,6 +904,7 @@ protected:
     void bind_system_globals_impl() {}
     int n_vertices_impl() const { return 0; }
     void set_random_positions_impl(double, double) {}
+    void set_random_positions_in_domains_impl() {}
     void compute_fpower_total_impl() {}
     void save_state_impl(df::DeviceField1D<int>, int) {}
     void restore_state_impl(df::DeviceField1D<int>, int) {}

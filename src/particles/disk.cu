@@ -640,6 +640,10 @@ void Disk::set_random_positions_impl(double box_pad_x, double box_pad_y) {
     throw std::runtime_error("Disk::set_random_positions_impl: not implemented");
 }
 
+void Disk::set_random_positions_in_domains_impl() {
+    throw std::runtime_error("Disk::set_random_positions_in_domains_impl: not implemented");
+}
+
 void Disk::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
     if (this->last_state_pos.size() != this->pos.size()) {
         this->last_state_pos.resize(this->pos.size());

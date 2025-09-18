@@ -12,6 +12,10 @@
 // TODO: define units
 
 
+// TODO: probably should NOT be writing anything in init that doesnt exist already, whether in append mode or not
+
+// TODO: add a way to manually save an array to trajectory under the current step with optional array indices to save:
+
 // TODO: redesign all data so that it is all saved arbitrarily many times at different timesteps - when you index the data at a given step, each value is defined as its most recent saved state
 // TODO: add center-of-mass velocity cancelling
 // TODO: add a save method that saves only elements from a given index

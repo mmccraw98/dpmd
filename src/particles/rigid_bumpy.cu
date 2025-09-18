@@ -359,6 +359,86 @@ __global__ void set_random_positions_in_box_kernel(
     states[i] = st;
 }
 
+// Set random positions of particles within their domains
+// the domains are assumed to be convex polygons
+__global__ void set_random_positions_in_domains_kernel(
+    const int N_domains,
+    curandStatePhilox4_32_10_t* __restrict__ states,
+    double* __restrict__ pos_x,
+    double* __restrict__ pos_y,
+    double* __restrict__ angle,
+    double* __restrict__ vertex_pos_x,
+    double* __restrict__ vertex_pos_y,
+    const double* __restrict__ domain_pos_x,
+    const double* __restrict__ domain_pos_y,
+    const double* __restrict__ domain_centroid_x,
+    const double* __restrict__ domain_centroid_y,
+    const int* __restrict__ domain_offset,
+    const int* __restrict__ domain_particle_id,
+    const double* __restrict__ domain_fractional_area
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N_domains) return;
+
+    const int d_beg = domain_offset[i];
+    const int d_end = domain_offset[i+1];
+    
+    curandStatePhilox4_32_10_t st = states[i];
+    double rng_t = curand_uniform_double(&st);  // random triangle
+    double rng_u = curand_uniform_double(&st);  // random point in triangle
+    double rng_v = curand_uniform_double(&st);  // random point in triangle
+    double rng_w = curand_uniform_double(&st);  // random angle
+
+    double d_frac_area_prev = 0.0;
+    int j_sel = 0;
+    // find the index within the fractional triangle areas that is greater than or equal to the target
+    for (int j = d_beg; j < d_end; ++j) {
+        const double d_frac_area = domain_fractional_area[j];
+        if ((rng_t > d_frac_area_prev) && (rng_t <= d_frac_area)) { j_sel = j; break; }
+        d_frac_area_prev = d_frac_area;
+    }
+
+    // selected triangle vertices
+    double a_x = domain_centroid_x[i];
+    double a_y = domain_centroid_y[i];
+    double b_x = domain_pos_x[j_sel];
+    double b_y = domain_pos_y[j_sel];
+    int c_index = ((j_sel + 1 - d_beg) % (d_end - d_beg)) + d_beg;
+    double c_x = domain_pos_x[c_index];
+    double c_y = domain_pos_y[c_index];
+
+    // uniform sample inside triangle
+    if (rng_u + rng_v > 1.0) { rng_u = 1.0 - rng_u; rng_v = 1.0 - rng_v; }
+
+    const int particle_id = domain_particle_id[i];
+    const int n_vertices_per_particle = md::poly::g_poly.n_vertices_per_particle[particle_id];
+    const int particle_offset = md::poly::g_poly.particle_offset[particle_id];
+
+    double new_pos_x = a_x + rng_u * (b_x - a_x) + rng_v * (c_x - a_x);
+    double new_pos_y = a_y + rng_u * (b_y - a_y) + rng_v * (c_y - a_y);
+    double angle_period_inv = (n_vertices_per_particle > 1) ? 1.0 / n_vertices_per_particle : 0.0;
+    double new_angle_i = rng_w * 2 * M_PI * angle_period_inv;
+
+    // Displace and rotate all vertices
+    double s, c; sincos(new_angle_i - angle[particle_id], &s, &c);
+    double pos_x_i = pos_x[particle_id];
+    double pos_y_i = pos_y[particle_id];
+    for (int j = 0; j < n_vertices_per_particle; ++j) {
+        double dx = vertex_pos_x[particle_offset + j] - pos_x_i;
+        double dy = vertex_pos_y[particle_offset + j] - pos_y_i;
+        double rx = c*dx - s*dy;
+        double ry = s*dx + c*dy;
+        vertex_pos_x[particle_offset + j] = new_pos_x + rx;
+        vertex_pos_y[particle_offset + j] = new_pos_y + ry;
+    }
+    
+    pos_x[particle_id] = new_pos_x;
+    pos_y[particle_id] = new_pos_y;
+    angle[particle_id] = new_angle_i;
+
+    states[i] = st;
+}
+
 // Compute the kinetic energy for each particle
 __global__ void compute_ke_kernel(
     const double* __restrict__ vx,
@@ -766,6 +846,22 @@ void RigidBumpy::set_random_positions_impl(double box_pad_x, double box_pad_y) {
         this->pos.rng_states.data().get(),
         this->pos.xptr(), this->pos.yptr(), this->angle.ptr(),
         this->vertex_pos.xptr(), this->vertex_pos.yptr(), box_pad_x, box_pad_y);
+}
+
+void RigidBumpy::set_random_positions_in_domains_impl() {
+    if (!this->pos.rng_enabled()) { this->pos.enable_rng(); }  // enable RNG if not already enabled
+    const int N_domains = this->domain_particle_id.size();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N_domains);
+    CUDA_LAUNCH(kernels::set_random_positions_in_domains_kernel, G, B,
+        N_domains,
+        this->pos.rng_states.data().get(),
+        this->pos.xptr(), this->pos.yptr(), this->angle.ptr(),
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(),
+        this->domain_pos.xptr(), this->domain_pos.yptr(),
+        this->domain_centroid.xptr(), this->domain_centroid.yptr(),
+        this->domain_offset.ptr(), this->domain_particle_id.ptr(),
+        this->domain_fractional_area.ptr());
 }
 
 // Compute the total power for each system

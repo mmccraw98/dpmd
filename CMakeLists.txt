@@ -116,6 +116,7 @@ set(TEST_SOURCES
     tests/jam_rigid_bumpy_wall_final.cu
     tests/rigid_bumpy_equilibrate_wall.cu
     tests/box_sample_rigid_bumpy_wall_final.cu
+    tests/domain_sample_rigid_bumpy_wall_final.cu
 )
 
 # Create test executables
