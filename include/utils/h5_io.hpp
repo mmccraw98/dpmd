@@ -10,6 +10,64 @@
 #include <type_traits>
 #include <climits>
 
+class H5Handle {
+public:
+    using CloseFn = herr_t (*)(hid_t);
+
+    H5Handle() : id_(-1), closer_(nullptr) {}
+    H5Handle(hid_t id, CloseFn closer) : id_(id), closer_(closer) {}
+    ~H5Handle() { reset(); }
+
+    H5Handle(const H5Handle&) = delete;
+    H5Handle& operator=(const H5Handle&) = delete;
+
+    H5Handle(H5Handle&& other) noexcept : id_(other.id_), closer_(other.closer_) {
+        other.id_ = -1;
+        other.closer_ = nullptr;
+    }
+
+    H5Handle& operator=(H5Handle&& other) noexcept {
+        if (this != &other) {
+            reset();
+            id_ = other.id_;
+            closer_ = other.closer_;
+            other.id_ = -1;
+            other.closer_ = nullptr;
+        }
+        return *this;
+    }
+
+    hid_t get() const { return id_; }
+    explicit operator bool() const { return id_ >= 0; }
+
+    void reset() {
+        if (id_ >= 0 && closer_) {
+            closer_(id_);
+        }
+        id_ = -1;
+        closer_ = nullptr;
+    }
+
+    hid_t release() {
+        hid_t tmp = id_;
+        id_ = -1;
+        closer_ = nullptr;
+        return tmp;
+    }
+
+private:
+    hid_t   id_;
+    CloseFn closer_;
+};
+
+inline H5Handle open_group_checked(hid_t parent, const std::string& name) {
+    hid_t group = H5Gopen(parent, name.c_str(), H5P_DEFAULT);
+    if (group < 0) {
+        throw std::runtime_error("open_group_checked: missing group '" + name + "'");
+    }
+    return H5Handle(group, &H5Gclose);
+}
+
 // WIP:
 
 // ===============================

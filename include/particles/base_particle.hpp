@@ -105,30 +105,27 @@ public:
         if (meta_file < 0) {
             throw std::runtime_error("BaseParticle::load_from_hdf5: failed to open meta file: " + meta_path);
         }
-        
+        ::H5Handle meta_file_handle(meta_file, &H5Fclose);
+
         // load static
-        hid_t static_group = H5Gopen(meta_file, "static", H5P_DEFAULT);
-        load_static_from_hdf5_group(static_group);  // load everything that is required
-        load_optional_from_hdf5_group(static_group, optional_loading);  // load any one-offs
-        H5Gclose(static_group);
-        
+        auto static_group = ::open_group_checked(meta_file, "static");
+        load_static_from_hdf5_group(static_group.get());  // load everything that is required
+        load_from_hdf5_group(static_group.get());  // load everything that we can find in the static group
+        load_optional_from_hdf5_group(static_group.get(), optional_loading);  // load any one-offs
+
         // location: init, final, restart
         if (location == "init") {
-            hid_t init_group = H5Gopen(meta_file, "init", H5P_DEFAULT);
-            load_from_hdf5_group(init_group);
-            H5Gclose(init_group);
+            auto init_group = ::open_group_checked(meta_file, location);
+            load_from_hdf5_group(init_group.get());
         } else if (location == "final") {
-            hid_t final_group = H5Gopen(meta_file, "final", H5P_DEFAULT);
-            load_from_hdf5_group(final_group);
-            H5Gclose(final_group);
+            auto final_group = ::open_group_checked(meta_file, location);
+            load_from_hdf5_group(final_group.get());
         } else if (location == "restart") {
-            hid_t restart_group = H5Gopen(meta_file, "restart", H5P_DEFAULT);
-            load_from_hdf5_group(restart_group);
-            H5Gclose(restart_group);
+            auto restart_group = ::open_group_checked(meta_file, location);
+            load_from_hdf5_group(restart_group.get());
         } else {
             throw std::runtime_error("BaseParticle::load_from_hdf5: invalid location");
         }
-        H5Fclose(meta_file);
 
         sync_box();
         sync_system();
@@ -150,32 +147,27 @@ public:
         allocate_particles(N);
         allocate_vertices(Nv);
 
+        // system data
+        system_id.from_host(read_vector<int>(group, "system_id"));
+        system_size.from_host(read_vector<int>(group, "system_size"));
+        system_offset.from_host(read_vector<int>(group, "system_offset"));
+
+        // neighbor list data
         {
             std::string neighbor_method_str = read_scalar<std::string>(group, "neighbor_method");
             if (neighbor_method_str == "Naive") {
                 set_neighbor_method(NeighborMethod::Naive);
             } else if (neighbor_method_str == "Cell") {
                 set_neighbor_method(NeighborMethod::Cell);
+                cell_size.from_host(read_vector_2d<double>(group, "cell_size"));
+                cell_dim.from_host(read_vector_2d<int>(group, "cell_dim"));
+                cell_system_start.from_host(read_vector<int>(group, "cell_system_start"));
+                verlet_skin.from_host(read_vector<double>(group, "verlet_skin"));
+                thresh2.from_host(read_vector<double>(group, "thresh2"));
             } else {
                 throw std::runtime_error("BaseParticle::load_static_from_hdf5_group: invalid neighbor method");
             }
         }
-
-        // system data
-        system_id.from_host(read_vector<int>(group, "system_id"));
-        system_size.from_host(read_vector<int>(group, "system_size"));
-        system_offset.from_host(read_vector<int>(group, "system_offset"));
-        box_size.from_host(read_vector_2d<double>(group, "box_size"));
-
-        // load cell list data
-        if (get_neighbor_method() == NeighborMethod::Cell) {
-            cell_size.from_host(read_vector_2d<double>(group, "cell_size"));
-            cell_dim.from_host(read_vector_2d<int>(group, "cell_dim"));
-            cell_system_start.from_host(read_vector<int>(group, "cell_system_start"));
-            verlet_skin.from_host(read_vector<double>(group, "verlet_skin"));
-            thresh2.from_host(read_vector<double>(group, "thresh2"));
-        }
-
         // run the impl for class-specific static loading
         derived().load_static_from_hdf5_group_impl(group);
     }

@@ -1,15 +1,17 @@
-// TODO: simplify input:
-    - should be just one loading function that loads whatever arrays it finds in a given group
-    - then, when loading:
-        - strategically load all in the static group
-        - load the state from whatever location you want (needs to be provided)
-    - this way, if something static (i.e. box size) has been updated, we get the latest when loading state
+// TODO: add rigid bumpy particle with core
 
+// TODO: add cell list to rigid bumpy particle
+
+// TODO: define units
+
+// TODO: define proper energy scale for rigid bumpy particles
+
+// TODO: fix the init writing (if input and output directories are the same, the init should NEVER be overwritten)
+
+// TODO: simplify the output manager
 // TODO: add support for different logging schemes (linear, logarithmic)
 // TODO: add energy file
 // TODO: output manager configs
-
-// TODO: define units
 
 
 // TODO: probably should NOT be writing anything in init that doesnt exist already, whether in append mode or not
