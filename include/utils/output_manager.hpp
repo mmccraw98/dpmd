@@ -14,11 +14,21 @@
 #include <filesystem>
 #include <variant>
 #include <typeindex>
+#include <unordered_set>
 
 #include "utils/h5_io.hpp"
 #include "utils/device_fields.cuh"
 
 namespace io {      
+
+enum class LogMode { Disabled, Linear, Logarithmic };
+
+struct LogPolicy {
+    LogMode mode = LogMode::Disabled;
+    int interval = 0;
+    int next_log_step = 0;
+    int last_logged_step = -1;
+};
 
 // Dimensionality for trajectory dataset management
 enum class Dimensionality { D1, D2 };
@@ -61,6 +71,7 @@ template<typename T>
 struct Host1D { 
     std::vector<T> v; 
     int N = 0; 
+    std::string index_name;
     using value_type = T;  // for template metaprogramming
 };
 
@@ -68,6 +79,8 @@ template<typename T>
 struct Host2D { 
     std::vector<T> x, y; 
     int N = 0; 
+    std::string index_name;
+    std::vector<T> interleaved; // optional staging for trajectory writes
     using value_type = T;  // for template metaprogramming
 };
 
@@ -91,6 +104,7 @@ struct DsetCacheEntry {
     hsize_t N = 0;           // size of entity dimension
     hsize_t reserved_T = 0;  // capacity in time dimension
     hsize_t cursor_T = 0;    // written timesteps
+    std::type_index type = typeid(void);
 };
 
 enum class TaskKind { Trajectory, Restart, FinalInit, FinalEnd };
@@ -122,17 +136,33 @@ public:
     void set_extra_final_fields(const std::vector<std::string>& names){ extra_final_names_ = names; }
     void set_extra_static_fields(const std::vector<std::string>& names){ extra_static_names_ = names; }
     void set_extra_restart_fields(const std::vector<std::string>& names){ extra_restart_names_ = names; }
-    void set_trajectory_interval(int v) { traj_interval_ = v; }
-    void set_restart_interval(int v)    { restart_interval_ = v; }
+    void set_trajectory_log_policy(LogMode mode, int interval) {
+        traj_mode_requested_ = mode;
+        traj_interval_ = interval;
+        refresh_policies();
+    }
+    void set_restart_log_policy(LogMode mode, int interval) {
+        restart_mode_requested_ = mode;
+        restart_interval_ = interval;
+        refresh_policies();
+    }
+    void set_console_log_policy(LogMode mode, int interval) {
+        console_mode_requested_ = mode;
+        console_interval_ = interval;
+        refresh_policies();
+    }
+    void set_trajectory_interval(int v) { set_trajectory_log_policy(LogMode::Linear, v); }
+    void set_restart_interval(int v)    { set_restart_log_policy(LogMode::Linear, v); }
+    void set_console_interval(int v)    { set_console_log_policy(LogMode::Linear, v); }
     void set_queue_limit(std::size_t tasks)  { queue_limit_ = tasks; }
     void set_bytes_limit(std::size_t bytes)  { bytes_limit_ = bytes; }
     void set_preextend_block(int K)          { preextend_block_ = K; }
     void set_append_mode(bool on)            { append_mode_ = on; }
     void set_resume_from_restart(bool on)    { resume_from_restart_ = on; }
     // Opt-outs
-    void enable_meta(bool on)        { enable_meta_ = on; }
-    void enable_trajectory(bool on)  { enable_traj_ = on; }
-    void enable_console(bool on)     { enable_console_ = on; }
+    void enable_meta(bool on)        { enable_meta_ = on; refresh_policies(); }
+    void enable_trajectory(bool on)  { enable_traj_ = on; refresh_policies(); }
+    void enable_console(bool on)     { enable_console_ = on; refresh_policies(); }
     void set_console_fields(const std::vector<std::string>& names) { console_names_ = names; }
 
     // Lifecycle
@@ -277,6 +307,7 @@ public:
             }
         }
 
+        refresh_policies();
         start_workers();
     }
 
@@ -285,17 +316,18 @@ public:
         OutputRegistry reg; build_registry_safe(reg);
 
         // Console logging if enabled and fields provided
-        if (enable_console_ && !console_names_.empty()) {
+        if (enable_console_ && !console_names_.empty() && should_log(console_policy_, step_num)) {
             SaveTask t; t.kind = TaskKind::FinalInit; capture_registry_to_host(reg, console_names_, t);
+            apply_reindex(t);
             log_console(step_num, t);
         }
 
-        if (enable_traj_ && traj_interval_ > 0 && (step_num % traj_interval_) == 0 && !traj_names_.empty()) {
+        if (enable_traj_ && !traj_names_.empty() && should_log(traj_policy_, step_num)) {
             SaveTask t; t.kind = TaskKind::Trajectory; t.step = step_num; capture_registry_to_host(reg, traj_names_, t);
             enqueue_blocking(std::move(t));
         }
 
-        if (enable_meta_ && restart_interval_ > 0 && (step_num % restart_interval_) == 0) {
+        if (enable_meta_ && should_log(restart_policy_, step_num)) {
             // restart = static + state + extras
             std::vector<std::string> names = particles_.get_static_field_names();
             {
@@ -327,6 +359,7 @@ public:
                 std::vector<std::string> names = particles_.get_state_field_names();
                 if (!extra_final_names_.empty()) names.insert(names.end(), extra_final_names_.begin(), extra_final_names_.end());
                 SaveTask t; t.kind = TaskKind::FinalEnd; t.step = current_step_; capture_registry_to_host(reg, names, t);
+                apply_reindex(t);
                 // synchronous write to /final using same path as write_final_extras
                 std::lock_guard<std::mutex> lk(h5_mtx_);
                 hid_t g = h5_link_exists(meta_file_, "/final")
@@ -343,6 +376,11 @@ public:
             for (auto& kv : traj_cache_) shrink_to_cursor_locked(kv.second);
             if (timestep_cache_.dset >= 0) shrink_to_cursor_locked(timestep_cache_);
             H5Fflush(traj_file_, H5F_SCOPE_GLOBAL);
+            for (auto& kv : traj_cache_) {
+                if (kv.second.dset >= 0) H5Dclose(kv.second.dset);
+            }
+            traj_cache_.clear();
+            if (timestep_cache_.dset >= 0) { H5Dclose(timestep_cache_.dset); timestep_cache_.dset = -1; }
         }
 
         if (traj_file_ >= 0) { H5Fflush(traj_file_, H5F_SCOPE_GLOBAL); H5Fclose(traj_file_); traj_file_ = -1; }
@@ -361,6 +399,7 @@ private:
     // policy
     int traj_interval_ = 0;
     int restart_interval_ = 0;
+    int console_interval_ = 1;
     int preextend_block_ = 16;
     int current_step_ = 0;
     std::size_t queue_limit_ = 0;  // tasks
@@ -381,10 +420,18 @@ private:
     bool enable_console_ = false;
     std::vector<std::string> console_names_;
 
+    LogMode traj_mode_requested_ = LogMode::Linear;
+    LogMode restart_mode_requested_ = LogMode::Linear;
+    LogMode console_mode_requested_ = LogMode::Linear;
+    LogPolicy traj_policy_;
+    LogPolicy restart_policy_;
+    LogPolicy console_policy_;
+
     // HDF5 caches and lock
     std::mutex h5_mtx_;
     std::map<std::string, DsetCacheEntry> traj_cache_;
     DsetCacheEntry timestep_cache_{-1, Dimensionality::D1, 1, 0, 0};
+    std::unordered_set<std::string> ragged_fields_;
 
     // executor: workers and backpressure
     int max_workers_ = 1;
@@ -410,7 +457,28 @@ private:
         }
     }
 
-    // ---- snapshot and reindex (same-stream D2H) ----
+    void ensure_index_cached(const OutputRegistry& reg, const std::string& idx_name, SaveTask& out) {
+        if (idx_name.empty()) return;
+        if (out.index_cache.find(idx_name) != out.index_cache.end()) return;
+        auto iit = reg.fields.find(idx_name);
+        if (iit == reg.fields.end()) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' not found");
+        bool ok = false;
+        std::visit([&](const auto& ispec){
+            using ISpecT = std::decay_t<decltype(ispec)>;
+            if constexpr (std::is_same_v<ISpecT, FieldSpec1D<int>>) {
+                if (ispec.preprocess) ispec.preprocess();
+                auto* idev = ispec.get_device_field ? ispec.get_device_field() : nullptr;
+                if (!idev) throw std::runtime_error("index field has null device pointer: " + idx_name);
+                std::vector<int> inv(static_cast<std::size_t>(idev->size()));
+                idev->to_host(inv);
+                out.index_cache.emplace(idx_name, std::move(inv));
+                ok = true;
+            }
+        }, iit->second);
+        if (!ok) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' must be 1D int");
+    }
+
+    // ---- snapshot (same-stream D2H) ----
     void capture_registry_to_host(const OutputRegistry& reg, const std::vector<std::string>& names, SaveTask& out) {
         std::size_t bytes = 0;
         for (const auto& name : names) {
@@ -429,35 +497,8 @@ private:
                     Host1D<T> hb; hb.N = dev->size(); hb.v.resize(static_cast<std::size_t>(hb.N));
                     dev->to_host(hb.v);
                     if (enable_reindex_ && !idx_name.empty() && idx_name != name) {
-                        auto cit = out.index_cache.find(idx_name);
-                        if (cit == out.index_cache.end()) {
-                            auto iit = reg.fields.find(idx_name);
-                            if (iit == reg.fields.end()) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' not found");
-                            bool ok = false;
-                            std::visit([&](const auto& ispec){
-                                using ISpecT = std::decay_t<decltype(ispec)>;
-                                if constexpr (std::is_same_v<ISpecT, FieldSpec1D<int>>) {
-                                    if (ispec.preprocess) ispec.preprocess();
-                                    auto* idev = ispec.get_device_field ? ispec.get_device_field() : nullptr;
-                                    if (!idev) throw std::runtime_error("index field has null device pointer: " + idx_name);
-                                    std::vector<int> inv(static_cast<std::size_t>(idev->size()));
-                                    idev->to_host(inv);
-                                    out.index_cache.emplace(idx_name, std::move(inv));
-                                    ok = true;
-                                }
-                            }, iit->second);
-                            if (!ok) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' must be 1D int");
-                            cit = out.index_cache.find(idx_name);
-                        }
-                        const std::vector<int>& inv = cit->second;
-                        if (static_cast<int>(inv.size()) != hb.N) throw std::runtime_error("capture_registry_to_host: index size mismatch for '" + name + "'");
-                        std::vector<T> re(static_cast<std::size_t>(hb.N));
-                        for (int i=0;i<hb.N;++i) {
-                            int o = inv[static_cast<std::size_t>(i)];
-                            if (o < 0 || o >= hb.N) throw std::runtime_error("capture_registry_to_host: index value out of range for '" + name + "'");
-                            re[static_cast<std::size_t>(o)] = hb.v[static_cast<std::size_t>(i)];
-                        }
-                        hb.v.swap(re);
+                        ensure_index_cached(reg, idx_name, out);
+                        hb.index_name = idx_name;
                     }
                     bytes += hb.v.size() * sizeof(T);
                     out.one_d.emplace(name, HostVariant1D{std::move(hb)});
@@ -465,36 +506,8 @@ private:
                     Host2D<T> hb; hb.N = dev->size(); hb.x.resize(static_cast<std::size_t>(hb.N)); hb.y.resize(static_cast<std::size_t>(hb.N));
                     dev->to_host(hb.x, hb.y);
                     if (enable_reindex_ && !idx_name.empty() && idx_name != name) {
-                        auto cit = out.index_cache.find(idx_name);
-                        if (cit == out.index_cache.end()) {
-                            auto iit = reg.fields.find(idx_name);
-                            if (iit == reg.fields.end()) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' not found");
-                            bool ok = false;
-                            std::visit([&](const auto& ispec){
-                                using ISpecT = std::decay_t<decltype(ispec)>;
-                                if constexpr (std::is_same_v<ISpecT, FieldSpec1D<int>>) {
-                                    if (ispec.preprocess) ispec.preprocess();
-                                    auto* idev = ispec.get_device_field ? ispec.get_device_field() : nullptr;
-                                    if (!idev) throw std::runtime_error("index field has null device pointer: " + idx_name);
-                                    std::vector<int> inv(static_cast<std::size_t>(idev->size()));
-                                    idev->to_host(inv);
-                                    out.index_cache.emplace(idx_name, std::move(inv));
-                                    ok = true;
-                                }
-                            }, iit->second);
-                            if (!ok) throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' must be 1D int");
-                            cit = out.index_cache.find(idx_name);
-                        }
-                        const std::vector<int>& inv = cit->second;
-                        if (static_cast<int>(inv.size()) != hb.N) throw std::runtime_error("capture_registry_to_host: index size mismatch for '" + name + "'");
-                        std::vector<T> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
-                        for (int i=0;i<hb.N;++i) {
-                            int o = inv[static_cast<std::size_t>(i)];
-                            if (o < 0 || o >= hb.N) throw std::runtime_error("capture_registry_to_host: index value out of range for '" + name + "'");
-                            rx[static_cast<std::size_t>(o)] = hb.x[static_cast<std::size_t>(i)];
-                            ry[static_cast<std::size_t>(o)] = hb.y[static_cast<std::size_t>(i)];
-                        }
-                        hb.x.swap(rx); hb.y.swap(ry);
+                        ensure_index_cached(reg, idx_name, out);
+                        hb.index_name = idx_name;
                     }
                     bytes += (hb.x.size() + hb.y.size()) * sizeof(T);
                     out.two_d.emplace(name, HostVariant2D{std::move(hb)});
@@ -504,12 +517,122 @@ private:
         out.bytes = bytes;
     }
 
-    // (apply_inverse helpers removed; reindexing handled inline via index_by and index_cache)
+    void apply_reindex(SaveTask& t) {
+        if (!enable_reindex_) return;
+        for (auto& kv : t.one_d) {
+            const std::string& name = kv.first;
+            std::visit([&](auto& hb) {
+                using T = typename std::decay_t<decltype(hb)>::value_type;
+                if (hb.index_name.empty() || hb.index_name == name) return;
+                auto it = t.index_cache.find(hb.index_name);
+                if (it == t.index_cache.end()) throw std::runtime_error("apply_reindex: missing index cache for '" + hb.index_name + "'");
+                const std::vector<int>& inv = it->second;
+                if (static_cast<int>(inv.size()) != hb.N) throw std::runtime_error("apply_reindex: index size mismatch for '" + name + "'");
+                std::vector<T> reordered(static_cast<std::size_t>(hb.N));
+                for (int i=0;i<hb.N;++i) {
+                    int o = inv[static_cast<std::size_t>(i)];
+                    if (o < 0 || o >= hb.N) throw std::runtime_error("apply_reindex: index out of range for '" + name + "'");
+                    reordered[static_cast<std::size_t>(o)] = hb.v[static_cast<std::size_t>(i)];
+                }
+                hb.v.swap(reordered);
+                hb.index_name.clear();
+            }, kv.second);
+        }
+
+        for (auto& kv : t.two_d) {
+            const std::string& name = kv.first;
+            std::visit([&](auto& hb) {
+                using T = typename std::decay_t<decltype(hb)>::value_type;
+                if (hb.index_name.empty() || hb.index_name == name) return;
+                auto it = t.index_cache.find(hb.index_name);
+                if (it == t.index_cache.end()) throw std::runtime_error("apply_reindex: missing index cache for '" + hb.index_name + "'");
+                const std::vector<int>& inv = it->second;
+                if (static_cast<int>(inv.size()) != hb.N) throw std::runtime_error("apply_reindex: index size mismatch for '" + name + "'");
+                std::vector<T> rx(static_cast<std::size_t>(hb.N)), ry(static_cast<std::size_t>(hb.N));
+                for (int i=0;i<hb.N;++i) {
+                    int o = inv[static_cast<std::size_t>(i)];
+                    if (o < 0 || o >= hb.N) throw std::runtime_error("apply_reindex: index out of range for '" + name + "'");
+                    rx[static_cast<std::size_t>(o)] = hb.x[static_cast<std::size_t>(i)];
+                    ry[static_cast<std::size_t>(o)] = hb.y[static_cast<std::size_t>(i)];
+                }
+                hb.x.swap(rx); hb.y.swap(ry);
+                hb.index_name.clear();
+            }, kv.second);
+        }
+    }
+
+    void configure_policy(LogPolicy& policy, bool enabled, LogMode requested_mode, int interval) {
+        policy.last_logged_step = -1;
+        policy.next_log_step = 0;
+        if (!enabled) {
+            policy.mode = LogMode::Disabled;
+            policy.interval = 0;
+            return;
+        }
+
+        int sanitized_interval = interval;
+        if (sanitized_interval < 0) sanitized_interval = 0;
+
+        switch (requested_mode) {
+            case LogMode::Disabled:
+                policy.mode = LogMode::Disabled;
+                policy.interval = 0;
+                break;
+            case LogMode::Linear:
+                if (sanitized_interval <= 0) {
+                    policy.mode = LogMode::Disabled;
+                    policy.interval = 0;
+                } else {
+                    policy.mode = LogMode::Linear;
+                    policy.interval = sanitized_interval;
+                }
+                break;
+            case LogMode::Logarithmic:
+                if (sanitized_interval <= 0) {
+                    policy.mode = LogMode::Disabled;
+                    policy.interval = 0;
+                } else {
+                    policy.mode = LogMode::Logarithmic;
+                    policy.interval = sanitized_interval;
+                    policy.next_log_step = sanitized_interval;
+                }
+                break;
+        }
+    }
+
+    void refresh_policies() {
+        configure_policy(traj_policy_, enable_traj_ && traj_interval_ > 0, traj_mode_requested_, traj_interval_);
+        configure_policy(restart_policy_, enable_meta_ && restart_interval_ > 0, restart_mode_requested_, restart_interval_);
+        configure_policy(console_policy_, enable_console_ && console_interval_ > 0, console_mode_requested_, console_interval_);
+    }
+
+    bool should_log(LogPolicy& policy, int step) {
+        switch (policy.mode) {
+            case LogMode::Disabled:
+                return false;
+            case LogMode::Linear:
+                return policy.interval > 0 && (step % policy.interval) == 0;
+            case LogMode::Logarithmic:
+                if (policy.interval <= 0) return false;
+                if (step < policy.next_log_step) return false;
+                policy.last_logged_step = step;
+                do {
+                    policy.next_log_step += policy.interval;
+                } while (policy.next_log_step <= step);
+                return true;
+        }
+        return false;
+    }
 
     // ---- worker management with blocking backpressure ----
     void start_workers() {
         if (max_workers_ < 1) max_workers_ = 1;
+        if (max_workers_ == 1) {
+            queue_limit_ = 0;
+            return;
+        }
         if (queue_limit_ == 0) queue_limit_ = static_cast<std::size_t>(max_workers_);
+        workers_.reserve(static_cast<std::size_t>(max_workers_));
         for (int i=0;i<max_workers_;++i) workers_.emplace_back([this]{ worker_loop(); });
     }
 
@@ -524,7 +647,7 @@ private:
     }
 
     void enqueue_blocking(SaveTask&& t) {
-        if (max_workers_ == 1) { process_task(t); return; }
+        if (max_workers_ <= 1) { apply_reindex(t); process_task(t); return; }
         std::unique_lock<std::mutex> lk(q_mtx_);
         q_cv_.wait(lk, [this,&t]{
             bool q_ok = tasks_.size() < queue_limit_;
@@ -546,6 +669,7 @@ private:
                 if (shutting_down_.load(std::memory_order_relaxed) && tasks_.empty()) return;
                 t = std::move(tasks_.front()); tasks_.pop();
             }
+            apply_reindex(t);
             process_task(t);
             {
                 std::lock_guard<std::mutex> lk(q_mtx_);
@@ -555,7 +679,7 @@ private:
         }
     }
 
-    void process_task(const SaveTask& t) {
+    void process_task(SaveTask& t) {
         switch (t.kind) {
             case TaskKind::Trajectory: write_trajectory(t); break;
             case TaskKind::Restart:    write_restart_atomic(t); break;
@@ -588,44 +712,60 @@ private:
         timestep_cache_.reserved_T = 0; timestep_cache_.cursor_T = 0;
     }
 
-    void ensure_traj_dataset_locked(const std::string& name, Dimensionality dim, hsize_t N) {
+    template<typename T>
+    bool ensure_traj_dataset_locked(const std::string& name, Dimensionality dim, hsize_t N) {
+        if (ragged_fields_.count(name)) return false;
         auto it = traj_cache_.find(name);
-        if (it != traj_cache_.end()) return;
-        DsetCacheEntry e; e.dim = dim; e.N = N; e.reserved_T = 0; e.cursor_T = 0;
-        // If exists, open and initialize from current dims
-        if (h5_link_exists(traj_file_, ("/"+name).c_str())) {
-            hid_t d = H5Dopen2(traj_file_, ("/"+name).c_str(), H5P_DEFAULT);
-            if (d < 0) throw std::runtime_error("ensure_traj_dataset_locked: open failed for "+name);
+        if (it != traj_cache_.end()) {
+            DsetCacheEntry& e = it->second;
+            if (e.N != N) {
+                mark_field_ragged(name);
+                return false;
+            }
+            if (e.type != std::type_index(typeid(T))) {
+                throw std::runtime_error("ensure_traj_dataset_locked: type mismatch for " + name);
+            }
+            if (e.dim != dim) {
+                throw std::runtime_error("ensure_traj_dataset_locked: dimensionality mismatch for " + name);
+            }
+            return true;
+        }
+
+        std::string full = "/" + name;
+        if (h5_link_exists(traj_file_, full)) {
+            hid_t d = H5Dopen2(traj_file_, full.c_str(), H5P_DEFAULT);
+            if (d < 0) throw std::runtime_error("ensure_traj_dataset_locked: open failed for " + name);
             auto dims = get_dims(d);
             if (dim == Dimensionality::D1) {
-                if (!(dims.size()==2 && dims[1]==N)) { H5Dclose(d); throw std::runtime_error("ensure_traj_dataset_locked: dim mismatch for "+name); }
-                e.dset = d; e.reserved_T = dims[0]; e.cursor_T = dims[0];
+                if (!(dims.size()==2 && dims[1]==N)) { H5Dclose(d); mark_field_ragged(name); return false; }
             } else {
-                if (!(dims.size()==3 && dims[1]==N && dims[2]==2)) { H5Dclose(d); throw std::runtime_error("ensure_traj_dataset_locked: dim mismatch for "+name); }
-                e.dset = d; e.reserved_T = dims[0]; e.cursor_T = dims[0];
+                if (!(dims.size()==3 && dims[1]==N && dims[2]==2)) { H5Dclose(d); mark_field_ragged(name); return false; }
             }
+            DsetCacheEntry e; e.dim = dim; e.N = N; e.dset = d; e.reserved_T = dims[0]; e.cursor_T = dims[0]; e.type = std::type_index(typeid(T));
             traj_cache_.emplace(name, e);
-            return;
+            return true;
         }
-        // Otherwise create fresh
+
         hid_t space, dcpl;
         if (dim == Dimensionality::D1) {
             hsize_t dims2[2] = {0, N}, maxd[2] = {H5S_UNLIMITED, N};
             space = H5Screate_simple(2, dims2, maxd);
             dcpl  = H5Pcreate(H5P_DATASET_CREATE);
-            hsize_t chunks[2] = {static_cast<hsize_t>(std::max(1, preextend_block_)), N};
+            hsize_t chunks[2] = {static_cast<hsize_t>(std::max(1, preextend_block_)), std::max<hsize_t>(1, N)};
             H5Pset_chunk(dcpl, 2, chunks);
         } else {
             hsize_t dims3[3] = {0, N, 2}, maxd3[3] = {H5S_UNLIMITED, N, 2};
             space = H5Screate_simple(3, dims3, maxd3);
             dcpl  = H5Pcreate(H5P_DATASET_CREATE);
-            hsize_t chunks[3] = {static_cast<hsize_t>(std::max(1, preextend_block_)), N, 2};
+            hsize_t chunks[3] = {static_cast<hsize_t>(std::max(1, preextend_block_)), std::max<hsize_t>(1, N), 2};
             H5Pset_chunk(dcpl, 3, chunks);
         }
-        hid_t dnew = H5Dcreate2(traj_file_, ("/"+name).c_str(), H5T_NATIVE_DOUBLE, space, H5P_DEFAULT, dcpl, H5P_DEFAULT);
+        hid_t dnew = H5Dcreate2(traj_file_, full.c_str(), h5_native<T>(), space, H5P_DEFAULT, dcpl, H5P_DEFAULT);
         H5Pclose(dcpl); H5Sclose(space);
-        if (dnew < 0) throw std::runtime_error("ensure_traj_dataset_locked: create failed for "+name);
-        e.dset = dnew; traj_cache_.emplace(name, e);
+        if (dnew < 0) throw std::runtime_error("ensure_traj_dataset_locked: create failed for " + name);
+        DsetCacheEntry e; e.dim = dim; e.N = N; e.reserved_T = 0; e.cursor_T = 0; e.dset = dnew; e.type = std::type_index(typeid(T));
+        traj_cache_.emplace(name, e);
+        return true;
     }
 
     static void extend_locked(DsetCacheEntry& e, hsize_t add_T) {
@@ -642,28 +782,94 @@ private:
         else { hsize_t dims[3] = {e.cursor_T, e.N, 2}; H5Dset_extent(e.dset, dims); }
     }
 
-    void write_trajectory(const SaveTask& t) {
+    void mark_field_ragged(const std::string& name) {
+        if (ragged_fields_.insert(name).second) {
+            auto it = traj_cache_.find(name);
+            if (it != traj_cache_.end()) {
+                if (it->second.dset >= 0) H5Dclose(it->second.dset);
+                traj_cache_.erase(it);
+            }
+            if (traj_file_ >= 0) {
+                std::string full = "/" + name;
+                if (h5_link_exists(traj_file_, full)) {
+                    H5Ldelete(traj_file_, full.c_str(), H5P_DEFAULT);
+                }
+            }
+        }
+    }
+
+    ::H5Handle open_or_create_group_locked(hid_t parent, const std::string& name) {
+        if (h5_link_exists(parent, name)) {
+            hid_t g = H5Gopen(parent, name.c_str(), H5P_DEFAULT);
+            if (g < 0) throw std::runtime_error("open_or_create_group_locked: H5Gopen failed for " + name);
+            return ::H5Handle(g, &H5Gclose);
+        }
+        hid_t g = H5Gcreate2(parent, name.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        if (g < 0) throw std::runtime_error("open_or_create_group_locked: H5Gcreate2 failed for " + name);
+        return ::H5Handle(g, &H5Gclose);
+    }
+
+    template<typename HostT>
+    void write_ragged_locked(const std::string& name, int step, const HostT& hb) {
+        auto ragged_root = open_or_create_group_locked(traj_file_, "ragged");
+        auto field_group = open_or_create_group_locked(ragged_root.get(), name);
+        std::string dset = "step_" + std::to_string(step);
+        if constexpr (std::is_same_v<HostT, Host1D<typename HostT::value_type>>) {
+            using T = typename HostT::value_type;
+            write_vector<T>(field_group.get(), dset, hb.v);
+        } else {
+            using T = typename HostT::value_type;
+            write_vector_2d<T>(field_group.get(), dset, hb.x, hb.y);
+        }
+    }
+
+    void write_trajectory(SaveTask& t) {
+        for (auto& kv : t.two_d) {
+            std::visit([&](auto& hb) {
+                using T = typename std::decay_t<decltype(hb)>::value_type;
+                if (hb.N <= 0) {
+                    hb.interleaved.clear();
+                    return;
+                }
+                hb.interleaved.resize(static_cast<std::size_t>(hb.N) * 2);
+                for (int i=0;i<hb.N;++i) {
+                    hb.interleaved[2*static_cast<std::size_t>(i) + 0] = hb.x[static_cast<std::size_t>(i)];
+                    hb.interleaved[2*static_cast<std::size_t>(i) + 1] = hb.y[static_cast<std::size_t>(i)];
+                }
+            }, kv.second);
+        }
+
         std::lock_guard<std::mutex> lk(h5_mtx_);
         ensure_timestep_locked();
-        // Use the current row for both timestep and field datasets, then increment cursors at the end
         hsize_t row = timestep_cache_.cursor_T;
         if (row + 1 > timestep_cache_.reserved_T) extend_locked(timestep_cache_, static_cast<hsize_t>(preextend_block_));
         {
             hid_t fs = H5Dget_space(timestep_cache_.dset); hsize_t start[2] = {row, 0}; hsize_t cnt[2] = {1,1};
             H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
             hid_t ms = H5Screate_simple(2, cnt, nullptr);
-            int step = t.step; H5Dwrite(timestep_cache_.dset, H5T_NATIVE_INT, ms, fs, H5P_DEFAULT, &step);
+            int step_val = t.step; H5Dwrite(timestep_cache_.dset, H5T_NATIVE_INT, ms, fs, H5P_DEFAULT, &step_val);
             H5Sclose(ms); H5Sclose(fs);
         }
 
-        for (const auto& kv : t.one_d) {
-            const std::string& name = kv.first;
-            std::visit([&](const auto& hb) {
+        for (auto& kv : t.one_d) {
+            const std::string& field = kv.first;
+            std::visit([&](auto& hb) {
                 using T = typename std::decay_t<decltype(hb)>::value_type;
                 hsize_t N = static_cast<hsize_t>(hb.N);
-                ensure_traj_dataset_locked(name, Dimensionality::D1, N);
-                auto& e = traj_cache_[name];
-                // Align cursor with the chosen row for this write
+                if (N == 0) {
+                    mark_field_ragged(field);
+                    write_ragged_locked(field, t.step, hb);
+                    return;
+                }
+                if (ragged_fields_.count(field)) {
+                    write_ragged_locked(field, t.step, hb);
+                    return;
+                }
+                if (!ensure_traj_dataset_locked<T>(field, Dimensionality::D1, N)) {
+                    write_ragged_locked(field, t.step, hb);
+                    return;
+                }
+                auto& e = traj_cache_[field];
                 if (e.cursor_T != row) e.cursor_T = row;
                 if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
                 hid_t fs = H5Dget_space(e.dset); hsize_t start[2] = {e.cursor_T, 0}; hsize_t cnt[2] = {1, N};
@@ -674,26 +880,41 @@ private:
                 e.cursor_T = row + 1;
             }, kv.second);
         }
-        for (const auto& kv : t.two_d) {
-            const std::string& name = kv.first;
-            std::visit([&](const auto& hb) {
+
+        for (auto& kv : t.two_d) {
+            const std::string& field = kv.first;
+            std::visit([&](auto& hb) {
                 using T = typename std::decay_t<decltype(hb)>::value_type;
                 hsize_t N = static_cast<hsize_t>(hb.N);
-                ensure_traj_dataset_locked(name, Dimensionality::D2, N);
-                auto& e = traj_cache_[name];
+                if (N == 0) {
+                    mark_field_ragged(field);
+                    write_ragged_locked(field, t.step, hb);
+                    return;
+                }
+                if (ragged_fields_.count(field)) {
+                    write_ragged_locked(field, t.step, hb);
+                    return;
+                }
+                if (!ensure_traj_dataset_locked<T>(field, Dimensionality::D2, N)) {
+                    write_ragged_locked(field, t.step, hb);
+                    return;
+                }
+                auto& e = traj_cache_[field];
                 if (e.cursor_T != row) e.cursor_T = row;
                 if (e.cursor_T + 1 > e.reserved_T) extend_locked(e, static_cast<hsize_t>(preextend_block_));
                 hid_t fs = H5Dget_space(e.dset); hsize_t start[3] = {e.cursor_T, 0, 0}; hsize_t cnt[3] = {1, N, 2};
                 H5Sselect_hyperslab(fs, H5S_SELECT_SET, start, nullptr, cnt, nullptr);
                 hid_t ms = H5Screate_simple(3, cnt, nullptr);
-                std::vector<T> inter(static_cast<std::size_t>(hb.N) * 2);
-                for (int i=0;i<hb.N;++i) { inter[2*i+0]=hb.x[static_cast<std::size_t>(i)]; inter[2*i+1]=hb.y[static_cast<std::size_t>(i)]; }
-                H5Dwrite(e.dset, h5_native<T>(), ms, fs, H5P_DEFAULT, inter.data());
+                const T* ptr = hb.interleaved.data();
+                if (hb.interleaved.size() != static_cast<std::size_t>(hb.N) * 2) {
+                    throw std::runtime_error("write_trajectory: interleaved buffer size mismatch for field " + field);
+                }
+                H5Dwrite(e.dset, h5_native<T>(), ms, fs, H5P_DEFAULT, ptr);
                 H5Sclose(ms); H5Sclose(fs);
                 e.cursor_T = row + 1;
             }, kv.second);
         }
-        // Advance timestep cursor after field writes
+
         timestep_cache_.cursor_T = row + 1;
     }
 
@@ -742,9 +963,9 @@ private:
                 if (!dev) return; 
                 using SpecT = std::decay_t<decltype(s)>;
                 if constexpr (std::is_same_v<SpecT, FieldSpec1D<typename SpecT::value_type>>) {
-                    ensure_traj_dataset_locked(name, Dimensionality::D1, static_cast<hsize_t>(dev->size()));
+                    ensure_traj_dataset_locked<typename SpecT::value_type>(name, Dimensionality::D1, static_cast<hsize_t>(dev->size()));
                 } else {
-                    ensure_traj_dataset_locked(name, Dimensionality::D2, static_cast<hsize_t>(dev->size()));
+                    ensure_traj_dataset_locked<typename SpecT::value_type>(name, Dimensionality::D2, static_cast<hsize_t>(dev->size()));
                 }
             }, spec);
         }
@@ -849,5 +1070,3 @@ private:
 };
 
 } // namespace io
-
-

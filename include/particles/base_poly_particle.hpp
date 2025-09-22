@@ -253,7 +253,9 @@ public:
 
     // Load from hdf5 group and initialize the particle
     void load_from_hdf5_group_impl(hid_t group) {
-        this->vertex_pos.from_host(read_vector_2d<double>(group, "vertex_pos"));
+        if (h5_link_exists(group, "vertex_pos")) {
+            this->vertex_pos.from_host(read_vector_2d<double>(group, "vertex_pos"));
+        }
         if (h5_link_exists(group, "vertex_vel")) {
             this->vertex_vel.from_host(read_vector_2d<double>(group, "vertex_vel"));
         }

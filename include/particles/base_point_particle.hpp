@@ -196,7 +196,9 @@ public:
 
     // Load from hdf5 group and initialize the particle
     void load_from_hdf5_point_extras_impl(hid_t group) {
-        this->pos.from_host(read_vector_2d<double>(group, "pos"));  // required so not wrapped in a H5Aexists check
+        if (h5_link_exists(group, "pos")) {
+            this->pos.from_host(read_vector_2d<double>(group, "pos"));  // required so not wrapped in a H5Aexists check
+        }
         if (h5_link_exists(group, "vel")) {
             this->vel.from_host(read_vector_2d<double>(group, "vel"));
         }

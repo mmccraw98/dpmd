@@ -1042,8 +1042,12 @@ void RigidBumpy::load_static_from_hdf5_poly_extras_impl(hid_t group) {
 }
 
 void RigidBumpy::load_from_hdf5_poly_extras_impl(hid_t group) {
-    this->angle.from_host(read_vector<double>(group, "angle"));
-    this->pos.from_host(read_vector_2d<double>(group, "pos"));
+    if (h5_link_exists(group, "angle")) {
+        this->angle.from_host(read_vector<double>(group, "angle"));
+    }
+    if (h5_link_exists(group, "pos")) {
+        this->pos.from_host(read_vector_2d<double>(group, "pos"));
+    }
     if (h5_link_exists(group, "vel")) {
         this->vel.from_host(read_vector_2d<double>(group, "vel"));
     }
