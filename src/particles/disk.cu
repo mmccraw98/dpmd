@@ -427,6 +427,46 @@ __global__ void restore_system_state_kernel(
     box_size_y[i] = last_box_size_y[i];
 }
 
+__global__ void compute_contacts_kernel(
+    const double* __restrict__ x,
+    const double* __restrict__ y,
+    int* __restrict__ contacts
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+
+    const int sid = md::geo::g_sys.id[i];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+
+    const double xi = x[i], yi = y[i];
+    const double ri = g_disk.rad[i];
+
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+
+    int contact_count = 0;
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const double xj = x[j], yj = y[j];
+        const double rj = g_disk.rad[j];
+
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+
+        // Early reject if no overlap: r^2 >= (ri+rj)^2
+        const double radsum = ri + rj;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+        contact_count++;
+    }
+    contacts[i] = contact_count;
+}
+
 } // namespace kernels
 
 
@@ -536,9 +576,6 @@ void Disk::compute_fpower_total_impl() {
         this->fpower_total.resize(S);
     }
 
-    void* d_temp = this->cub_sys_agg.ptr();
-    size_t temp_bytes = this->cub_sys_agg.size();
-
     // Create transform iterator that computes force·velocity on-the-fly
     auto input_iter = thrust::make_transform_iterator(
         thrust::make_zip_iterator(thrust::make_tuple(
@@ -550,31 +587,18 @@ void Disk::compute_fpower_total_impl() {
         kernels::PowerFunctor()
     );
 
-    // 1) size request
-    cub::DeviceSegmentedReduce::Sum(
-        nullptr, temp_bytes,
-        input_iter, this->fpower_total.ptr(),
-        S,
-        this->system_offset.ptr(),
-        this->system_offset.ptr() + 1,
-        stream);
-
-    // 2) ensure workspace
-    if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
-        this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
-        d_temp = this->cub_sys_agg.ptr();
-    }
-
-    // 3) run
-    cub::DeviceSegmentedReduce::Sum(
-        d_temp, temp_bytes,
-        input_iter, this->fpower_total.ptr(),
-        S,
-        this->system_offset.ptr(),
-        this->system_offset.ptr() + 1,
-        stream);
+    this->segmented_sum(input_iter, this->fpower_total.ptr(), stream);
 }
 
+void Disk::compute_contacts_impl() {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::compute_contacts_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        this->contacts.ptr()
+    );
+}
 
 void Disk::sync_class_constants_impl() {
     bind_disk_globals(this->e_interaction.ptr(), this->mass.ptr(), this->rad.ptr(), this->rebuild_flag.ptr());

@@ -10,7 +10,13 @@
 #include <thrust/scan.h>
 #include <thrust/fill.h>
 #include <thrust/copy.h>
+#include <thrust/sort.h>
+#include <thrust/scatter.h>
+#include <thrust/unique.h>
 #include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/execution_policy.h>
 #include <type_traits>
 #include <utility>
@@ -71,7 +77,6 @@ template<class T>
 struct has_get_state_field_names_poly_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().get_state_field_names_poly_extras_impl())>> : std::true_type {};
 
-
 template<class T, class = void>
 struct has_output_build_registry_poly_extras_impl : std::false_type {};
 template<class T>
@@ -104,6 +109,10 @@ public:
     df::DeviceField1D<double>        vertex_mass;              // (Nv,) vertex mass
     df::DeviceField1D<double>        vertex_rad;               // (Nv,) vertex radius
     df::DeviceField1D<int>           cell_aux;                 // (C,) auxiliary data for each cell
+    df::DeviceField1D<int>           particle_neighbor_ids;    // (N_particle_neighbors,) - list of particle ids for the vertex neighbors
+    df::DeviceField1D<int>           particle_neighbor_start;  // (N+1,) - starting index of the neighbor list for a given particle in the particle_neighbor_ids list
+    df::DeviceField1D<int>           particle_neighbor_count;  // (N,) - number of neighbors for each particle
+    df::DeviceField2D<int>           pair_vertex_contacts;     // (N_particle_neighbors,2) - number of vertex contacts for each pair of particles
 
     inline static constexpr CellSortMethod cell_sort_method = CellSortMethod::Bucket;  // default sort method for the cell list
 
@@ -235,6 +244,86 @@ public:
     int n_vertices_impl() const {
         return this->vertex_pos.size();
     }
+
+    // Build the particle-level neighbor list from the vertex-level neighbor list
+    void build_particle_neighbors() {
+        const int N = this->n_particles();
+        const int Nv = this->n_vertices();
+        const int total_vertex_neighbors = this->n_neighbors();
+
+        this->particle_neighbor_count.resize(N); this->particle_neighbor_count.fill(0);
+        this->particle_neighbor_start.resize(N + 1); this->particle_neighbor_start.fill(0);
+        this->particle_neighbor_ids.resize(0);
+
+        if (total_vertex_neighbors == 0) {
+            this->particle_neighbor_start.set_element(N, 0);
+            return;
+        }
+
+        df::DeviceField1D<unsigned long long> pair_keys; pair_keys.resize(total_vertex_neighbors);
+
+        auto threads = md::launch::threads_for();
+        auto blocks = md::launch::blocks_for(Nv);
+        CUDA_LAUNCH(md::poly::fill_particle_neighbor_pair_keys_kernel,
+                    blocks, threads,
+                    pair_keys.ptr());
+
+        auto key_begin = pair_keys.begin();
+        auto key_end = key_begin + total_vertex_neighbors;
+        thrust::sort(thrust::device, key_begin, key_end);
+
+        auto unique_end = thrust::unique(thrust::device, key_begin, key_end);
+        const int num_unique = static_cast<int>(unique_end - key_begin);
+        pair_keys.resize(num_unique);
+
+        this->particle_neighbor_ids.resize(num_unique);
+
+        auto extract_primary = [] __device__ (unsigned long long key) -> int {
+            return static_cast<int>(key >> 32);
+        };
+        auto extract_neighbor = [] __device__ (unsigned long long key) -> int {
+            return static_cast<int>(key & 0xFFFFFFFFull);
+        };
+
+        thrust::transform(
+            thrust::device,
+            pair_keys.begin(),
+            pair_keys.begin() + num_unique,
+            this->particle_neighbor_ids.begin(),
+            extract_neighbor);
+
+        df::DeviceField1D<int> primary_ids; primary_ids.resize(num_unique);
+        df::DeviceField1D<int> per_particle_counts; per_particle_counts.resize(num_unique);
+
+        auto primary_begin = thrust::make_transform_iterator(pair_keys.begin(), extract_primary);
+        auto primary_end = primary_begin + num_unique;
+
+        auto particle_reduce_result = thrust::reduce_by_key(
+            thrust::device,
+            primary_begin,
+            primary_end,
+            thrust::make_constant_iterator<int>(1),
+            primary_ids.begin(),
+            per_particle_counts.begin());
+
+        const int n_particles_with_neighbors = static_cast<int>(particle_reduce_result.first - primary_ids.begin());
+
+        if (n_particles_with_neighbors > 0) {
+            thrust::scatter(
+                thrust::device,
+                per_particle_counts.begin(),
+                per_particle_counts.begin() + n_particles_with_neighbors,
+                primary_ids.begin(),
+                this->particle_neighbor_count.begin());
+        }
+
+        thrust::exclusive_scan(
+            this->particle_neighbor_count.begin(),
+            this->particle_neighbor_count.end(),
+            this->particle_neighbor_start.begin());
+        this->particle_neighbor_start.set_element(N, num_unique);
+    }
+
 
     // Load static data from hdf5 group and initialize the particle
     void load_static_from_hdf5_group_impl(hid_t group) {

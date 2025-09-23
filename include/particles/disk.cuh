@@ -99,6 +99,9 @@ public:
     // Compute the total power for each system
     void compute_fpower_total_impl();
 
+    // Compute the number of contacts for each particle
+    void compute_contacts_impl();
+
     // Save the current state of the system
     void save_state_impl(df::DeviceField1D<int> flag, int true_val);
 

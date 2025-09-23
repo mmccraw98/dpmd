@@ -26,8 +26,23 @@ int main(int argc, char** argv) {
 
     df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);
     std::cout << "Minimizing" << std::endl;
-    md::routines::minimize_fire_wall(P, dt, 1e6, 1e-16, 1e-16);
+    md::routines::minimize_fire_wall(P, dt, 1e6, 1e-4, 1e-4);
     std::cout << "Done" << std::endl;
+
+    P.build_particle_neighbors();
+    P.compute_contacts();
+    std::vector<int> contacts; P.contacts.to_host(contacts);
+    std::vector<int> particle_neighbor_start; P.particle_neighbor_start.to_host(particle_neighbor_start);
+
+    std::vector<int> pair_vertex_contacts_i, pair_vertex_contacts_j; P.pair_vertex_contacts.to_host(pair_vertex_contacts_i, pair_vertex_contacts_j);
+    std::vector<int> pair_ids_i, pair_ids_j; P.pair_ids.to_host(pair_ids_i, pair_ids_j);
+    for (int i = 0; i < contacts.size(); i++) {
+        std::cout << i << ": " << contacts[i] << std::endl;
+        for (int j = particle_neighbor_start[i]; j < particle_neighbor_start[i+1]; j++) {
+            std::cout << pair_ids_i[j] << " " << pair_ids_j[j] << ": " << pair_vertex_contacts_i[j] << " " << pair_vertex_contacts_j[j] << std::endl;
+        }
+        std::cout << std::endl;
+    }
 
     om.finalize();
 }

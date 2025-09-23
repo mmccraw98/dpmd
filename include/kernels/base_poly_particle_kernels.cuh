@@ -39,6 +39,11 @@ __global__ void fill_naive_vertex_neighbor_list_kernel(
     int* __restrict__ neighbor_ids
 );
 
+// Build particle-level pair keys (primary, neighbor)
+__global__ void fill_particle_neighbor_pair_keys_kernel(
+    unsigned long long* __restrict__ pair_keys
+);
+
 
 // device-side peek at a couple of slots (tiny kernel)
 __global__ void dbg(const int* a, int n);

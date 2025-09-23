@@ -1,9 +1,23 @@
-// TODO: add rigid bumpy particle with core
+// TODO: calculate system-average velocity
+// TODO: add center-of-mass velocity cancelling
+
+// TODO: implement system averaging (like system segmented sum but then divided by system size)
+
+// TODO: implement friction for rb (should first start with contact types)
+
+// TODO: implement pairwise distance
+
+
+// TODO: implement stress - make sure the stress tensor for rigid bodies is used!  i am not sure it is right otherwise
+// TODO: implement pressure
+
+// TODO: implement hessian
+
+// TODO: validate rigid bumpy particle with core
 
 // TODO: add cell list to rigid bumpy particle
 
 // TODO: define units
-
 // TODO: define proper energy scale for rigid bumpy particles
 
 // TODO: fix the init writing (if input and output directories are the same, the init should NEVER be overwritten)
@@ -19,7 +33,6 @@
 // TODO: add a way to manually save an array to trajectory under the current step with optional array indices to save:
 
 // TODO: redesign all data so that it is all saved arbitrarily many times at different timesteps - when you index the data at a given step, each value is defined as its most recent saved state
-// TODO: add center-of-mass velocity cancelling
 // TODO: add a save method that saves only elements from a given index
 // TODO: add pairwise calculations (contacts), add hessian, add stress, add pressure
 // TODO: add relevant plotting to python library - plot, animate, draw contact network

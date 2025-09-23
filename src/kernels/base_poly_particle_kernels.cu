@@ -54,5 +54,25 @@ __global__ void fill_naive_vertex_neighbor_list_kernel(
     }
 }
 
+__global__ void fill_particle_neighbor_pair_keys_kernel(
+    unsigned long long* __restrict__ pair_keys
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int Nv = md::geo::g_sys.n_vertices;
+    if (i >= Nv) return;
+
+    const int pid = md::poly::g_poly.particle_id[i];
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const int neighbor_pid = md::poly::g_poly.particle_id[j];
+        const unsigned long long key =
+            (static_cast<unsigned long long>(static_cast<unsigned int>(pid)) << 32) |
+            static_cast<unsigned int>(neighbor_pid);
+        pair_keys[k] = key;
+    }
 }
 
+}

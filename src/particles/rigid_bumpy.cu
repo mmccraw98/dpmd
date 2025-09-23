@@ -687,6 +687,72 @@ __global__ void set_n_dof_kernel(int* __restrict__ n_dof, const double* __restri
     n_dof[sid] = n_dof_sum;
 }
 
+__global__ void count_particle_contacts_kernel(
+    const double* __restrict__ vertex_pos_x, const double* __restrict__ vertex_pos_y,
+    const int* __restrict__ particle_neighbor_start, const int* __restrict__ particle_neighbor_ids,
+    int* __restrict__ pair_vertex_contacts_i, int* __restrict__ pair_vertex_contacts_j,
+    int* __restrict__ pair_ids_i, int* __restrict__ pair_ids_j,
+    int* __restrict__ contacts
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = md::geo::g_sys.n_particles;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const int beg = particle_neighbor_start[i];
+    const int end = particle_neighbor_start[i+1];
+    int contact_count = 0;
+    for (int p_k = beg; p_k < end; p_k++) {  // loop over the particle neighbors
+        int j = particle_neighbor_ids[p_k];
+        int num_interacting_vertices = 0;
+        for (int v_i = md::poly::g_poly.particle_offset[i]; v_i < md::poly::g_poly.particle_offset[i+1]; v_i++) {  // loop over the vertices of the particle
+            bool found_interaction = false;  // for each vertex of the current particle, check if it is interacting with the neighboring particle
+            const double xi = vertex_pos_x[v_i], yi = vertex_pos_y[v_i];
+            const double ri = g_rigid_bumpy.vertex_rad[v_i];
+            const int v_beg = md::geo::g_neigh.start[v_i];
+            const int v_end = md::geo::g_neigh.start[v_i + 1];
+            for (int k = v_beg; k < v_end; k++) {  // loop over the vertices of the particle neighbor
+                const int v_j = md::geo::g_neigh.ids[k];
+                if (j != md::poly::g_poly.particle_id[v_j]) continue;  // skip the vertex if it is not in the neighboring particle
+                // check if the vertex is overlapping with the neighboring vertex
+                const double xj = vertex_pos_x[v_j], yj = vertex_pos_y[v_j];
+                const double rj = g_rigid_bumpy.vertex_rad[v_j];
+                double dx, dy;
+                double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+                const double radsum = ri + rj;
+                const double radsum2 = radsum * radsum;
+                if (r2 >= radsum2) continue;
+                found_interaction = true;
+                break;
+            }
+            if (found_interaction) {
+                num_interacting_vertices++;
+            }
+        }
+        // once done aggregating the interacting vertices for the pair i-j, store the number of interacting vertices
+        pair_vertex_contacts_i[p_k] = num_interacting_vertices;  // for this pair
+        // find the index of the pair j-i in the particle neighbor list, store the number of interacting vertices for this pair
+        const int rev_beg = particle_neighbor_start[j];
+        const int rev_end = particle_neighbor_start[j+1];
+        for (int p_l = rev_beg; p_l < rev_end; p_l++) {
+            if (particle_neighbor_ids[p_l] == i) {
+                pair_vertex_contacts_j[p_l] = num_interacting_vertices;
+                break;
+            }
+        }
+        pair_ids_i[p_k] = i;
+        pair_ids_j[p_k] = j;
+        // if there are any interacting vertices, increment the contact count by 1
+        if (num_interacting_vertices > 0) {
+            contact_count++;
+        }
+    }
+    // finally, store the total number of contacts for the particle
+    contacts[i] = contact_count;
+}
 
 } // namespace kernels
 
@@ -872,9 +938,6 @@ void RigidBumpy::compute_fpower_total_impl() {
         this->fpower_total.resize(S);
     }
 
-    void* d_temp = this->cub_sys_agg.ptr();
-    size_t temp_bytes = this->cub_sys_agg.size();
-
     // Create transform iterator that computes force·velocity on-the-fly
     auto input_iter = thrust::make_transform_iterator(
         thrust::make_zip_iterator(thrust::make_tuple(
@@ -888,29 +951,28 @@ void RigidBumpy::compute_fpower_total_impl() {
         kernels::PowerFunctor()
     );
 
-    // 1) size request
-    cub::DeviceSegmentedReduce::Sum(
-        nullptr, temp_bytes,
-        input_iter, this->fpower_total.ptr(),
-        S,
-        this->system_offset.ptr(),
-        this->system_offset.ptr() + 1,
-        stream);
+    this->segmented_sum(input_iter, this->fpower_total.ptr(), stream);
+}
 
-    // 2) ensure workspace
-    if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
-        this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
-        d_temp = this->cub_sys_agg.ptr();
+void RigidBumpy::compute_contacts_impl() {
+    const int N = n_particles();
+    if (this->contacts.size() != N) {
+        this->contacts.resize(N);
     }
-
-    // 3) run
-    cub::DeviceSegmentedReduce::Sum(
-        d_temp, temp_bytes,
-        input_iter, this->fpower_total.ptr(),
-        S,
-        this->system_offset.ptr(),
-        this->system_offset.ptr() + 1,
-        stream);
+    if (this->pair_ids.size() != this->particle_neighbor_ids.size()) {
+        this->pair_ids.resize(this->particle_neighbor_ids.size());
+    }
+    if (this->pair_vertex_contacts.size() != this->particle_neighbor_ids.size()) {
+        this->pair_vertex_contacts.resize(this->particle_neighbor_ids.size());
+    }
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::count_particle_contacts_kernel, G, B,
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(),
+        this->particle_neighbor_start.ptr(), this->particle_neighbor_ids.ptr(),
+        this->pair_vertex_contacts.xptr(), this->pair_vertex_contacts.yptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->contacts.ptr());
 }
 
 void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {

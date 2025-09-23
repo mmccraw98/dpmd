@@ -14,6 +14,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <limits>
 #include "utils/output_manager.hpp"
 #include <filesystem>
 
@@ -33,6 +34,9 @@ public:
     df::DeviceField1D<double> pe;             // (N,)
     df::DeviceField1D<double> ke;             // (N,)
     df::DeviceField1D<double> area;           // (N,)
+
+    // Miscellaneous particle-level fields
+    df::DeviceField1D<int> contacts;  // (N,) - number of particle-particle contacts for each particle
 
     // Neighbor list fields
     df::DeviceField1D<int>    neighbor_count; // (N,) - number of neighbors for each particle
@@ -54,10 +58,10 @@ public:
 
 
     // System fields
-    df::DeviceField1D<int>    system_id;             // (N,) — assumed static - effectively true if systems arent permuted
-    df::DeviceField1D<int>    system_size;           // (S,) - number of particles in each system
-    df::DeviceField1D<int>    system_offset;         // (S+1) - starting index of the particles in each system
-    df::DeviceField1D<unsigned char> cub_sys_agg;    // (S,) temporary field for system-level aggregation
+    df::DeviceField1D<int>           system_id;             // (N,) — assumed static - effectively true if systems arent permuted
+    df::DeviceField1D<int>           system_size;           // (S,) - number of particles in each system
+    df::DeviceField1D<int>           system_offset;         // (S+1) - starting index of the particles in each system
+    df::DeviceField1D<unsigned char> cub_sys_agg;           // (S,) temporary field for system-level aggregation
     
     // Box fields
     df::DeviceField2D<double> box_size;          // (S,2) [Lx,Ly] - size of the box for each system
@@ -70,14 +74,19 @@ public:
     df::DeviceField1D<double> pe_total;          // (S,) - total potential energy for each system
     df::DeviceField1D<double> ke_total;          // (S,) - total kinetic energy for each system
     df::DeviceField1D<double> fpower_total;      // (S,) - total power for each system (used for the FIRE algorithm)
-    df::DeviceField1D<int> n_dof;                // (S,) - number of degrees of freedom for each system
+    df::DeviceField1D<int>    n_dof;             // (S,) - number of degrees of freedom for each system
+    df::DeviceField1D<int>    n_contacts_total;  // (S,) - total number of contacts for each system
 
     // Domain sampling fields
     df::DeviceField2D<double> domain_pos;             // (N_domain_vertices,2) - position of the domain
     df::DeviceField1D<double> domain_fractional_area; // (N_domain_vertices,) - fractional area of the domain
     df::DeviceField2D<double> domain_centroid;        // (N_domains,2) - centroid of the domain
-    df::DeviceField1D<int> domain_offset;          // (N_domains+1,) - offset of the domain
-    df::DeviceField1D<int> domain_particle_id;        // (N_domains,) - id of particle in the domain
+    df::DeviceField1D<int>    domain_offset;          // (N_domains+1,) - offset of the domain
+    df::DeviceField1D<int>    domain_particle_id;     // (N_domains,) - id of particle in the domain
+
+    // Pairwise fields
+    df::DeviceField2D<int>    pair_ids;   // (N_neighbors,2) - id of the two particles in the pairwise interaction
+    df::DeviceField1D<double> pair_dist;  // (N_neighbors,) - distance between the pair of particles given by pair_ids
 
     // Neighbor method
     NeighborMethod neighbor_method = NeighborMethod::Naive;
@@ -484,68 +493,14 @@ public:
     // Compute the total potential energy of each system
     void compute_pe_total() {
         cudaStream_t stream = 0;
-        const int S = this->n_systems();
-
-        void* d_temp = this->cub_sys_agg.ptr();
-        size_t temp_bytes = this->cub_sys_agg.size();
-
-        // 1) size request
-        cub::DeviceSegmentedReduce::Sum(
-            nullptr, temp_bytes,
-            this->pe.ptr(), this->pe_total.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
-
-        // 2) ensure workspace
-        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
-            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
-            d_temp = this->cub_sys_agg.ptr();
-        }
-
-        // 3) run
-        cub::DeviceSegmentedReduce::Sum(
-            d_temp, temp_bytes,
-            this->pe.ptr(), this->pe_total.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
+        segmented_sum(this->pe.ptr(), this->pe_total.ptr(), stream);
     }
 
     // Compute the kinetic energy of each system
     void compute_ke_total() {
         compute_ke();  // compute the kinetic energy of each particle
         cudaStream_t stream = 0;
-        const int S = this->n_systems();
-
-        void* d_temp = this->cub_sys_agg.ptr();
-        size_t temp_bytes = this->cub_sys_agg.size();
-
-        // 1) size request
-        cub::DeviceSegmentedReduce::Sum(
-            nullptr, temp_bytes,
-            this->ke.ptr(), this->ke_total.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
-
-        // 2) ensure workspace
-        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
-            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
-            d_temp = this->cub_sys_agg.ptr();
-        }
-
-        // 3) run
-        cub::DeviceSegmentedReduce::Sum(
-            d_temp, temp_bytes,
-            this->ke.ptr(), this->ke_total.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
+        segmented_sum(this->ke.ptr(), this->ke_total.ptr(), stream);
     }
 
     // Compute the temperature of each system
@@ -562,36 +517,8 @@ public:
     df::DeviceField1D<double> compute_particle_area_total() {
         cudaStream_t stream = 0;
         const int S = this->n_systems();
-
-        void* d_temp = this->cub_sys_agg.ptr();
-        size_t temp_bytes = this->cub_sys_agg.size();
-
         df::DeviceField1D<double> area_total(S);
-
-        // 1) size request
-        cub::DeviceSegmentedReduce::Sum(
-            nullptr, temp_bytes,
-            this->area.ptr(), area_total.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
-
-        // 2) ensure workspace
-        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
-            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
-            d_temp = this->cub_sys_agg.ptr();
-        }
-
-        // 3) run
-        cub::DeviceSegmentedReduce::Sum(
-            d_temp, temp_bytes,
-            this->area.ptr(), area_total.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
-
+        segmented_sum(this->area.ptr(), area_total.ptr(), stream);
         return area_total;
     }
 
@@ -615,32 +542,16 @@ public:
         
         // Sum per system using CUB
         cudaStream_t stream = 0;
-        void* d_temp = this->cub_sys_agg.ptr();
-        size_t temp_bytes = this->cub_sys_agg.size();
-        
-        // 1) size request
-        cub::DeviceSegmentedReduce::Sum(
-            nullptr, temp_bytes,
-            pf_per_particle.ptr(), this->packing_fraction.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
+        segmented_sum(pf_per_particle.ptr(), this->packing_fraction.ptr(), stream);
+    }
 
-        // 2) ensure workspace
-        if (temp_bytes > static_cast<size_t>(this->cub_sys_agg.size())) {
-            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
-            d_temp = this->cub_sys_agg.ptr();
-        }
+    // Compute the number of contacts for each particle
+    void compute_contacts() { derived().compute_contacts_impl(); }
 
-        // 3) run
-        cub::DeviceSegmentedReduce::Sum(
-            d_temp, temp_bytes,
-            pf_per_particle.ptr(), this->packing_fraction.ptr(),
-            S,
-            this->system_offset.ptr(),
-            this->system_offset.ptr() + 1,
-            stream);
+    // Compute the total number of contacts for each system
+    void compute_n_contacts_total() {
+        cudaStream_t stream = 0;
+        segmented_sum(this->contacts.ptr(), this->n_contacts_total.ptr(), stream);
     }
 
     // Compute the total power of each system (used for the FIRE algorithm)
@@ -852,6 +763,18 @@ public:
             p.get_device_field = [this]{ return &this->temperature; };
             reg.fields["temperature"] = p;
         }
+        {
+            FieldSpec1D<int> p; 
+            p.preprocess = [this]{ this->compute_contacts(); };
+            p.get_device_field = [this]{ return &this->contacts; };
+            reg.fields["contacts"] = p;
+        }
+        {
+            FieldSpec1D<int> p; 
+            p.preprocess = [this]{ this->compute_contacts(); this->compute_n_contacts_total(); };
+            p.get_device_field = [this]{ return &this->n_contacts_total; };
+            reg.fields["n_contacts_total"] = p;
+        }
         // Register the inverse index field itself (1D int) so index_by can find it
         {
             FieldSpec1D<int> p;
@@ -871,6 +794,61 @@ public:
 protected:
     Derived&       derived()       { return static_cast<Derived&>(*this); }
     const Derived& derived() const { return static_cast<const Derived&>(*this); }
+
+    template <typename InputIterator, typename OutputIterator>
+    void segmented_sum(InputIterator input,
+                       OutputIterator output,
+                       int num_segments,
+                       const int* begin_offsets,
+                       const int* end_offsets,
+                       cudaStream_t stream = 0) {
+        if (num_segments <= 0) {
+            return;
+        }
+
+        size_t temp_bytes = 0;
+        cub::DeviceSegmentedReduce::Sum(
+            nullptr, temp_bytes,
+            input, output,
+            num_segments,
+            begin_offsets,
+            end_offsets,
+            stream);
+
+        void* workspace = reserve_sys_agg_storage(temp_bytes);
+        cub::DeviceSegmentedReduce::Sum(
+            workspace, temp_bytes,
+            input, output,
+            num_segments,
+            begin_offsets,
+            end_offsets,
+            stream);
+    }
+
+    template <typename InputIterator, typename OutputIterator>
+    void segmented_sum(InputIterator input,
+                       OutputIterator output,
+                       cudaStream_t stream = 0) {
+        const int S = this->n_systems();
+        segmented_sum(input, output, S,
+                      this->system_offset.ptr(),
+                      this->system_offset.ptr() + 1,
+                      stream);
+    }
+
+    void* reserve_sys_agg_storage(size_t temp_bytes) {
+        if (temp_bytes == 0) {
+            return nullptr;
+        }
+        const size_t current_bytes = static_cast<size_t>(this->cub_sys_agg.size());
+        if (temp_bytes > current_bytes) {
+            if (temp_bytes > static_cast<size_t>(std::numeric_limits<int>::max())) {
+                throw std::runtime_error("BaseParticle::reserve_sys_agg_storage: temp_bytes exceeds DeviceField1D capacity");
+            }
+            this->cub_sys_agg.resize(static_cast<int>(temp_bytes));
+        }
+        return static_cast<void*>(this->cub_sys_agg.ptr());
+    }
 
     // Default no-op hooks
     void allocate_particles_impl(int) {}
@@ -898,6 +876,7 @@ protected:
     void set_random_positions_impl(double, double) {}
     void set_random_positions_in_domains_impl() {}
     void compute_fpower_total_impl() {}
+    void compute_contacts_impl() {}
     void save_state_impl(df::DeviceField1D<int>, int) {}
     void restore_state_impl(df::DeviceField1D<int>, int) {}
     void load_from_hdf5_group_impl(hid_t) {}
