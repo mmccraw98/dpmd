@@ -113,6 +113,9 @@ public:
     // Compute the distances between each pair of particles
     void compute_pair_dist_impl();
 
+    // Compute the stress tensor for each system
+    void compute_stress_tensor_impl();
+
     void save_state_impl(df::DeviceField1D<int> flag, int true_val);
 
     void restore_state_impl(df::DeviceField1D<int> flag, int true_val);

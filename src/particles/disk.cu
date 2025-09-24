@@ -502,6 +502,75 @@ __global__ void compute_pair_dist_kernel(
     }
 }
 
+__global__ void compute_stress_tensor_kernel(
+    const double* __restrict__ x,
+    const double* __restrict__ y,
+    const double* __restrict__ vel_x,
+    const double* __restrict__ vel_y,
+    double* __restrict__ stress_tensor_xx,
+    double* __restrict__ stress_tensor_xy,
+    double* __restrict__ stress_tensor_yx,
+    double* __restrict__ stress_tensor_yy
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    const double e_i = g_disk.e_interaction[sid];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const double xi = x[i], yi = y[i];
+    const double vel_xi = vel_x[i], vel_yi = vel_y[i];
+    const double mass = g_disk.mass[i];
+    const double rad = g_disk.rad[i];
+
+    double stress_tensor_xx_acc = mass * vel_xi * vel_xi;
+    double stress_tensor_xy_acc = mass * vel_xi * vel_yi;
+    double stress_tensor_yx_acc = stress_tensor_xy_acc;
+    double stress_tensor_yy_acc = mass * vel_yi * vel_yi;
+
+    double box_area = box_size_x * box_size_y;
+
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const double xj = x[j], yj = y[j];
+        const double radj = g_disk.rad[j];
+
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+
+        const double radsum = rad + radj;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+
+        const double r = sqrt(r2);
+        const double inv = 1.0 / r;
+        const double nx = dx * inv;
+        const double ny = dy * inv;
+
+        const double delta = radsum - r;
+        const double fmag = e_i * delta;
+
+        const double force_x = -fmag * nx;
+        const double force_y = -fmag * ny;
+
+        stress_tensor_xx_acc += dx * force_x / 2.0;
+        stress_tensor_xy_acc += dx * force_y / 2.0;
+        stress_tensor_yx_acc += dy * force_x / 2.0;
+        stress_tensor_yy_acc += dy * force_y / 2.0;
+    }
+
+    stress_tensor_xx[i] = stress_tensor_xx_acc / box_area;
+    stress_tensor_xy[i] = stress_tensor_xy_acc / box_area;
+    stress_tensor_yx[i] = stress_tensor_yx_acc / box_area;
+    stress_tensor_yy[i] = stress_tensor_yy_acc / box_area;
+}
+
 } // namespace kernels
 
 
@@ -650,6 +719,17 @@ void Disk::compute_pair_dist_impl() {
         this->pos.xptr(), this->pos.yptr(),
         this->pair_ids.xptr(), this->pair_ids.yptr(),
         this->pair_dist.ptr()
+    );
+}
+
+void Disk::compute_stress_tensor_impl() {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::compute_stress_tensor_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        this->vel.xptr(), this->vel.yptr(),
+        this->stress_tensor_x.xptr(), this->stress_tensor_x.yptr(), this->stress_tensor_y.xptr(), this->stress_tensor_y.yptr()
     );
 }
 

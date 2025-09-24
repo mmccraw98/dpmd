@@ -2,6 +2,9 @@
 #include <cuda_runtime.h>
 #include <math_constants.h>
 #include <cstdint>
+#include <thrust/tuple.h>
+#include <thrust/transform.h>
+#include <thrust/execution_policy.h>
 
 namespace md { namespace geo {
 
@@ -99,6 +102,14 @@ __global__ void compute_temperature_kernel(
     const int*    __restrict__ n_dof,
     double*       __restrict__ temperature
 );
+
+// Structs
+struct StressTrace2D {
+	__host__ __device__
+	double operator()(const thrust::tuple<double, double>& t) const {
+		return 0.5 * (thrust::get<0>(t) + thrust::get<1>(t));
+	}
+};
 
 // -----------------------------
 // Geometry helpers (ASAP / __forceinline__)

@@ -77,6 +77,10 @@ public:
     df::DeviceField1D<int>    n_dof;             // (S,) - number of degrees of freedom for each system
     df::DeviceField1D<int>    n_contacts_total;  // (S,) - total number of contacts for each system
 
+    // Stresses
+    df::DeviceField2D<double> stress_tensor_x; // (S,2) - x-components of the stress tensor for each system (xx, xy)
+    df::DeviceField2D<double> stress_tensor_y; // (S,2) - y-components of the stress tensor for each system (yx, yy)
+
     // Domain sampling fields
     df::DeviceField2D<double> domain_pos;             // (N_domain_vertices,2) - position of the domain
     df::DeviceField1D<double> domain_fractional_area; // (N_domain_vertices,) - fractional area of the domain
@@ -557,6 +561,38 @@ public:
     // Compute the distances between each pair of particles
     void compute_pair_dist() { derived().compute_pair_dist_impl(); }
 
+    // Compute the stress tensor for each system
+    void compute_stress_tensor() {
+        if (this->stress_tensor_x.size() != this->n_particles()) {
+            this->stress_tensor_x.resize(this->n_particles());
+        }
+        if (this->stress_tensor_y.size() != this->n_particles()) {
+            this->stress_tensor_y.resize(this->n_particles());
+        }
+        derived().compute_stress_tensor_impl();
+    }
+
+    // Compute the pressure for each system (trace of the stress tensor divided by the number of dimensions, 2)
+    void compute_pressure() {
+        compute_stress_tensor();
+
+        cudaStream_t stream = 0;
+        const int S = this->n_systems();
+        if (this->pressure.size() != S) {
+            this->pressure.resize(S);
+        }
+
+        auto input_iter = thrust::make_transform_iterator(
+            thrust::make_zip_iterator(thrust::make_tuple(
+                this->stress_tensor_x.xptr(),  // sigma_xx
+                this->stress_tensor_y.yptr()   // sigma_yy
+            )),
+            md::geo::StressTrace2D()
+        );
+
+        this->segmented_sum(input_iter, this->pressure.ptr(), stream);
+    }
+
     // Compute the total power of each system (used for the FIRE algorithm)
     void compute_fpower_total() { derived().compute_fpower_total_impl(); }
 
@@ -738,12 +774,6 @@ public:
         }
         // {  // not supported yet
         //     Provider1D p; p.ensure_ready = []{};
-        //     p.get_device = [this]{ return &this->pressure; };
-        //     p.index_space = IndexSpace::System;
-        //     reg.fields["pressure"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
-        // }
-        // {  // not supported yet
-        //     Provider1D p; p.ensure_ready = []{};
         //     p.get_device = [this]{ return &this->temperature; };
         //     p.index_space = IndexSpace::System;
         //     reg.fields["temperature"] = FieldDesc{ Dimensionality::D1, IndexSpace::System, p, {} };
@@ -789,6 +819,24 @@ public:
             p.preprocess = [this]{ this->compute_pair_dist(); };
             p.get_device_field = [this]{ return &this->pair_ids; };
             reg.fields["pair_ids"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_x; };
+            reg.fields["stress_tensor_x"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_y; };
+            reg.fields["stress_tensor_y"] = p;
+        }
+        {
+            FieldSpec1D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); this->compute_pressure(); };
+            p.get_device_field = [this]{ return &this->pressure; };
+            reg.fields["pressure"] = p;
         }
         // Register the inverse index field itself (1D int) so index_by can find it
         {

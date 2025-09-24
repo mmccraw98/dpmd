@@ -21,12 +21,12 @@ int main(int argc, char** argv) {
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 1, false);
     om.set_trajectory_interval(1);
     om.set_extra_init_fields({"pe_total"});
-    om.set_extra_final_fields({"pe_total", "friction_coeff", "pair_ids", "pair_dist", "pair_vertex_contacts", "contacts"});
+    om.set_extra_final_fields({"pe_total", "friction_coeff", "pair_ids", "pair_dist", "pair_vertex_contacts", "contacts", "stress_tensor_x", "stress_tensor_y", "pressure"});
     om.initialize();
 
     df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);
     std::cout << "Minimizing" << std::endl;
-    md::routines::minimize_fire_wall(P, dt, 1e6, 1e-4, 1e-4);
+    md::routines::minimize_fire_wall(P, dt, 1e6, 1e-16, 1e-16);
     std::cout << "Done" << std::endl;
 
     om.finalize();
