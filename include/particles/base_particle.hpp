@@ -78,8 +78,10 @@ public:
     df::DeviceField1D<int>    n_contacts_total;  // (S,) - total number of contacts for each system
 
     // Stresses
-    df::DeviceField2D<double> stress_tensor_x; // (S,2) - x-components of the stress tensor for each system (xx, xy)
-    df::DeviceField2D<double> stress_tensor_y; // (S,2) - y-components of the stress tensor for each system (yx, yy)
+    df::DeviceField2D<double> stress_tensor_x; // (N,2) - x-components of the stress tensor for each system (xx, xy)
+    df::DeviceField2D<double> stress_tensor_y; // (N,2) - y-components of the stress tensor for each system (yx, yy)
+    df::DeviceField2D<double> stress_tensor_total_x; // (S, 2) - x-components of the total stress tensor for each system (xx, xy)
+    df::DeviceField2D<double> stress_tensor_total_y; // (S, 2) - y-components of the total stress tensor for each system (yx, yy)
 
     // Domain sampling fields
     df::DeviceField2D<double> domain_pos;             // (N_domain_vertices,2) - position of the domain
@@ -572,6 +574,20 @@ public:
         derived().compute_stress_tensor_impl();
     }
 
+    // Compute the total stress tensor for each system
+    void compute_stress_tensor_total() {
+        if (this->stress_tensor_total_x.size() != this->n_systems()) {
+            this->stress_tensor_total_x.resize(this->n_systems());
+        }
+        if (this->stress_tensor_total_y.size() != this->n_systems()) {
+            this->stress_tensor_total_y.resize(this->n_systems());
+        }
+        this->segmented_sum(this->stress_tensor_x.xptr(), this->stress_tensor_total_x.xptr(), 0);
+        this->segmented_sum(this->stress_tensor_y.yptr(), this->stress_tensor_total_y.yptr(), 0);
+        this->segmented_sum(this->stress_tensor_x.yptr(), this->stress_tensor_total_y.xptr(), 0);
+        this->segmented_sum(this->stress_tensor_y.xptr(), this->stress_tensor_total_x.yptr(), 0);
+    }
+
     // Compute the pressure for each system (trace of the stress tensor divided by the number of dimensions, 2)
     void compute_pressure() {
         compute_stress_tensor();
@@ -831,6 +847,18 @@ public:
             p.preprocess = [this]{ this->compute_stress_tensor(); };
             p.get_device_field = [this]{ return &this->stress_tensor_y; };
             reg.fields["stress_tensor_y"] = p;
+        }
+        {
+            FieldSpec2D<double> p;
+            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_total_x; };
+            reg.fields["stress_tensor_total_x"] = p;
+        }
+        {
+            FieldSpec2D<double> p;
+            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_total_y; };
+            reg.fields["stress_tensor_total_y"] = p;
         }
         {
             FieldSpec1D<double> p; 
