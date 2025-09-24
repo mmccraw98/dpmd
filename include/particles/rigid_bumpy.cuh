@@ -35,15 +35,17 @@ public:
     df::DeviceField1D<double>       angular_vel;    // (N,) - angular velocity of the particle
     df::DeviceField1D<double>       mass;           // (N,) - mass of the particle
     df::DeviceField1D<double>       moment_inertia; // (N,) - moment of inertia of the particle
+    df::DeviceField1D<double>       friction_coeff; // (N_particle_neighbors,) - friction coefficient for each pair of particles
+    df::DeviceField2D<int>          pair_vertex_contacts;     // (N_particle_neighbors,2) - number of vertex contacts for each pair of particles
 
     // Sum up the forces on the particles
-    void compute_particle_forces();  // TODO: could raise this to BasePolyParticle????
+    void compute_particle_forces();
 
     // Compute the pairwise forces on the particles
-    void compute_forces_impl();  // TODO: could raise this to BasePolyParticle - or at least separate into vertex-level and particle-level
+    void compute_forces_impl();
 
     // Compute the wall forces
-    void compute_wall_forces_impl();  // TODO: could raise this to BasePolyParticle
+    void compute_wall_forces_impl();
 
     // Compute the damping forces
     void compute_damping_forces_impl(df::DeviceField1D<double> scale);
@@ -104,6 +106,12 @@ public:
 
     // Compute the number of contacts for each particle
     void compute_contacts_impl();
+
+    // Compute the friction coefficients for each pair of particles
+    void compute_friction_coeff();
+
+    // Compute the distances between each pair of particles
+    void compute_pair_dist_impl();
 
     void save_state_impl(df::DeviceField1D<int> flag, int true_val);
 

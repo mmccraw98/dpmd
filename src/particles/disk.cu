@@ -467,6 +467,41 @@ __global__ void compute_contacts_kernel(
     contacts[i] = contact_count;
 }
 
+__global__ void compute_pair_dist_kernel(
+    const double* __restrict__ x,
+    const double* __restrict__ y,
+    int* __restrict__ pair_ids_i, 
+    int* __restrict__ pair_ids_j,
+    double* __restrict__ pair_dist
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+
+    const int sid = md::geo::g_sys.id[i];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+
+    const double xi = x[i], yi = y[i];
+
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const double xj = x[j], yj = y[j];
+
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+
+        pair_dist[k] = sqrt(r2);
+        pair_ids_i[k] = i;
+        pair_ids_j[k] = j;
+    }
+}
+
 } // namespace kernels
 
 
@@ -597,6 +632,24 @@ void Disk::compute_contacts_impl() {
     CUDA_LAUNCH(kernels::compute_contacts_kernel, G, B,
         this->pos.xptr(), this->pos.yptr(),
         this->contacts.ptr()
+    );
+}
+
+void Disk::compute_pair_dist_impl() {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    const int N_neighbors = this->n_neighbors();
+    if (this->pair_ids.size() != N_neighbors) {
+        this->pair_ids.resize(N_neighbors);
+    }
+    if (this->pair_dist.size() != N_neighbors) {
+        this->pair_dist.resize(N_neighbors);
+    }
+    CUDA_LAUNCH(kernels::compute_pair_dist_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->pair_dist.ptr()
     );
 }
 

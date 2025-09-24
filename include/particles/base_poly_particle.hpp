@@ -112,7 +112,6 @@ public:
     df::DeviceField1D<int>           particle_neighbor_ids;    // (N_particle_neighbors,) - list of particle ids for the vertex neighbors
     df::DeviceField1D<int>           particle_neighbor_start;  // (N+1,) - starting index of the neighbor list for a given particle in the particle_neighbor_ids list
     df::DeviceField1D<int>           particle_neighbor_count;  // (N,) - number of neighbors for each particle
-    df::DeviceField2D<int>           pair_vertex_contacts;     // (N_particle_neighbors,2) - number of vertex contacts for each pair of particles
 
     inline static constexpr CellSortMethod cell_sort_method = CellSortMethod::Bucket;  // default sort method for the cell list
 

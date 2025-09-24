@@ -554,6 +554,9 @@ public:
         segmented_sum(this->contacts.ptr(), this->n_contacts_total.ptr(), stream);
     }
 
+    // Compute the distances between each pair of particles
+    void compute_pair_dist() { derived().compute_pair_dist_impl(); }
+
     // Compute the total power of each system (used for the FIRE algorithm)
     void compute_fpower_total() { derived().compute_fpower_total_impl(); }
 
@@ -775,6 +778,18 @@ public:
             p.get_device_field = [this]{ return &this->n_contacts_total; };
             reg.fields["n_contacts_total"] = p;
         }
+        {
+            FieldSpec1D<double> p; 
+            p.preprocess = [this]{ this->compute_pair_dist(); };
+            p.get_device_field = [this]{ return &this->pair_dist; };
+            reg.fields["pair_dist"] = p;
+        }
+        {
+            FieldSpec2D<int> p; 
+            p.preprocess = [this]{ this->compute_pair_dist(); };
+            p.get_device_field = [this]{ return &this->pair_ids; };
+            reg.fields["pair_ids"] = p;
+        }
         // Register the inverse index field itself (1D int) so index_by can find it
         {
             FieldSpec1D<int> p;
@@ -877,6 +892,7 @@ protected:
     void set_random_positions_in_domains_impl() {}
     void compute_fpower_total_impl() {}
     void compute_contacts_impl() {}
+    void compute_pair_dist_impl() {}
     void save_state_impl(df::DeviceField1D<int>, int) {}
     void restore_state_impl(df::DeviceField1D<int>, int) {}
     void load_from_hdf5_group_impl(hid_t) {}

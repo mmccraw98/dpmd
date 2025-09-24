@@ -102,6 +102,9 @@ public:
     // Compute the number of contacts for each particle
     void compute_contacts_impl();
 
+    // Compute the distances between each pair of particles
+    void compute_pair_dist_impl();
+
     // Save the current state of the system
     void save_state_impl(df::DeviceField1D<int> flag, int true_val);
 

@@ -3,22 +3,17 @@
 
 // TODO: implement system averaging (like system segmented sum but then divided by system size)
 
-// TODO: implement friction for rb (should first start with contact types)
-
-// TODO: implement pairwise distance
-
-
 // TODO: implement stress - make sure the stress tensor for rigid bodies is used!  i am not sure it is right otherwise
 // TODO: implement pressure
 
 // TODO: implement hessian
-
+// TODO: define units
+// TODO: define proper energy scale for rigid bumpy particles
+// TODO: if rigid bumpy particle with core requires multiple energy scales, implement them
 // TODO: validate rigid bumpy particle with core
 
 // TODO: add cell list to rigid bumpy particle
 
-// TODO: define units
-// TODO: define proper energy scale for rigid bumpy particles
 
 // TODO: fix the init writing (if input and output directories are the same, the init should NEVER be overwritten)
 

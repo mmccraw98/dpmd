@@ -754,6 +754,105 @@ __global__ void count_particle_contacts_kernel(
     contacts[i] = contact_count;
 }
 
+__global__ void compute_friction_coeff_kernel(
+    const double* __restrict__ pos_x, const double* __restrict__ pos_y,
+    const double* __restrict__ vertex_pos_x, const double* __restrict__ vertex_pos_y,
+    const int* __restrict__ particle_neighbor_start, const int* __restrict__ particle_neighbor_ids,
+    int* __restrict__ pair_ids_i, int* __restrict__ pair_ids_j,
+    double* __restrict__ friction_coeff
+) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = md::geo::g_sys.n_particles;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    const double e_i = g_rigid_bumpy.e_interaction[sid];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const double xi = pos_x[i], yi = pos_y[i];
+    const int beg = particle_neighbor_start[i];
+    const int end = particle_neighbor_start[i+1];
+    for (int p_k = beg; p_k < end; p_k++) {  // loop over the particle neighbors
+        double force_x = 0.0, force_y = 0.0;
+        double dist_x, dist_y;
+        int j = particle_neighbor_ids[p_k];
+        const double xj = pos_x[j], yj = pos_y[j];
+        double r_particle = sqrt(md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dist_x, dist_y));
+        for (int v_i = md::poly::g_poly.particle_offset[i]; v_i < md::poly::g_poly.particle_offset[i+1]; v_i++) {  // loop over the vertices of the particle
+            const double vxi = vertex_pos_x[v_i], vyi = vertex_pos_y[v_i];
+            const double ri = g_rigid_bumpy.vertex_rad[v_i];
+            const int v_beg = md::geo::g_neigh.start[v_i];
+            const int v_end = md::geo::g_neigh.start[v_i + 1];
+            for (int k = v_beg; k < v_end; k++) {  // loop over the vertices of the particle neighbor
+                const int v_j = md::geo::g_neigh.ids[k];
+                if (j != md::poly::g_poly.particle_id[v_j]) continue;  // skip the vertex if it is not in the neighboring particle
+                // check if the vertex is overlapping with the neighboring vertex
+                const double vxj = vertex_pos_x[v_j], vyj = vertex_pos_y[v_j];
+                const double rj = g_rigid_bumpy.vertex_rad[v_j];
+                double dx, dy;
+                double r2 = md::geo::disp_pbc_L(vxi, vyi, vxj, vyj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+                const double radsum = ri + rj;
+                const double radsum2 = radsum * radsum;
+                if (r2 >= radsum2) continue;
+
+                // Overlap: compute r and invr once
+                const double r   = sqrt(r2);
+                const double inv = 1.0 / r;
+                const double nx  = dx * inv;
+                const double ny  = dy * inv;
+
+                const double delta = radsum - r;
+                const double fmag  = e_i * delta;
+
+                // Force on i is along -n (repulsion)
+                force_x -= fmag * nx;
+                force_y -= fmag * ny;
+            }
+        }
+        double normal_force_x = force_x * dist_x / r_particle;
+        double normal_force_y = force_y * dist_y / r_particle;
+        double normal_force = sqrt(normal_force_x * normal_force_x + normal_force_y * normal_force_y);
+        if (normal_force == 0.0) continue;
+        double tangential_force_x = force_x - normal_force_x;
+        double tangential_force_y = force_y - normal_force_y;
+        double tangential_force = sqrt(tangential_force_x * tangential_force_x + tangential_force_y * tangential_force_y);
+        friction_coeff[p_k] = tangential_force / normal_force;
+        pair_ids_i[p_k] = i;
+        pair_ids_j[p_k] = j;
+    }
+}
+
+__global__ void compute_pair_dist_kernel(
+    const double* __restrict__ pos_x,
+    const double* __restrict__ pos_y,
+    const int* __restrict__ particle_neighbor_start, const int* __restrict__ particle_neighbor_ids,
+    int* __restrict__ pair_ids_i, 
+    int* __restrict__ pair_ids_j,
+    double* __restrict__ pair_dist
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const double xi = pos_x[i], yi = pos_y[i];
+    const int beg = particle_neighbor_start[i];
+    const int end = particle_neighbor_start[i+1];
+    for (int p_k = beg; p_k < end; p_k++) {
+        const int j = particle_neighbor_ids[p_k];
+        const double xj = pos_x[j], yj = pos_y[j];
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+        pair_dist[p_k] = sqrt(r2);
+        pair_ids_i[p_k] = i;
+        pair_ids_j[p_k] = j;
+    }
+}
+
 } // namespace kernels
 
 void RigidBumpy::compute_particle_forces() {
@@ -955,6 +1054,7 @@ void RigidBumpy::compute_fpower_total_impl() {
 }
 
 void RigidBumpy::compute_contacts_impl() {
+    this->build_particle_neighbors();
     const int N = n_particles();
     if (this->contacts.size() != N) {
         this->contacts.resize(N);
@@ -973,6 +1073,48 @@ void RigidBumpy::compute_contacts_impl() {
         this->pair_vertex_contacts.xptr(), this->pair_vertex_contacts.yptr(),
         this->pair_ids.xptr(), this->pair_ids.yptr(),
         this->contacts.ptr());
+}
+
+void RigidBumpy::compute_friction_coeff() {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    if (this->particle_neighbor_ids.size() == 0) {
+        throw std::runtime_error("RigidBumpy::compute_friction_coeff: particle neighbor ids is empty");
+    }
+    if (this->pair_ids.size() != this->particle_neighbor_ids.size()) {
+        this->pair_ids.resize(this->particle_neighbor_ids.size());
+    }
+    if (this->friction_coeff.size() != this->particle_neighbor_ids.size()) {
+        this->friction_coeff.resize(this->particle_neighbor_ids.size());
+    }
+    this->friction_coeff.fill(0.0);
+    CUDA_LAUNCH(kernels::compute_friction_coeff_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(),
+        this->particle_neighbor_start.ptr(), this->particle_neighbor_ids.ptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->friction_coeff.ptr());
+}
+
+void RigidBumpy::compute_pair_dist_impl() {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    if (this->particle_neighbor_ids.size() == 0) {
+        throw std::runtime_error("RigidBumpy::compute_pair_dist_impl: particle neighbor ids is empty");
+    }
+    if (this->pair_ids.size() != this->particle_neighbor_ids.size()) {
+        this->pair_ids.resize(this->particle_neighbor_ids.size());
+    }
+    if (this->pair_dist.size() != this->particle_neighbor_ids.size()) {
+        this->pair_dist.resize(this->particle_neighbor_ids.size());
+    }
+    CUDA_LAUNCH(kernels::compute_pair_dist_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        this->particle_neighbor_start.ptr(), this->particle_neighbor_ids.ptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->pair_dist.ptr());
 }
 
 void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
@@ -1187,6 +1329,24 @@ void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg)
         p.index_by = [order_inv_str]{ return order_inv_str; };
         p.get_device_field = [this]{ return &this->angular_vel; };
         reg.fields["angular_vel"] = p;
+    }
+    {
+        FieldSpec1D<double> p;
+        p.preprocess = [this]{ this->compute_contacts(); this->compute_friction_coeff(); };
+        p.get_device_field = [this]{ return &this->friction_coeff; };
+        reg.fields["friction_coeff"] = p;
+    }
+    {
+        FieldSpec2D<int> p;
+        p.preprocess = [this]{ this->compute_contacts(); };
+        p.get_device_field = [this]{ return &this->pair_vertex_contacts; };
+        reg.fields["pair_vertex_contacts"] = p;
+    }
+    {
+        FieldSpec1D<double> p; // overrides base class
+        p.preprocess = [this]{ this->build_particle_neighbors(); this->compute_pair_dist(); };
+        p.get_device_field = [this]{ return &this->pair_dist; };
+        reg.fields["pair_dist"] = p;
     }
 }
 
