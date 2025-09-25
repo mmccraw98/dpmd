@@ -243,10 +243,10 @@ public:
         // Register point-specific fields
         using io::FieldSpec1D; using io::FieldSpec2D;
         std::string order_inv_str = "order_inv";
-        // Override index field with new->old map so snapshots undo spatial reordering
+        // Expose canonical->current permutation so OutputManager can restore the original ordering
         {
             FieldSpec1D<int> p;
-            p.get_device_field = [this]{ return &this->order; };
+            p.get_device_field = [this]{ return &this->order_inv; };
             reg.fields[order_inv_str] = p;
         }
         {

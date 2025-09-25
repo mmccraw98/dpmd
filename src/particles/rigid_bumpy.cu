@@ -1536,7 +1536,7 @@ std::vector<std::string> RigidBumpy::get_state_field_names_poly_extras_impl() {
 void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg) {
     // Register rigid bumpy specific fields
     using io::FieldSpec1D; using io::FieldSpec2D;
-    std::string order_inv_str = "order_inv";
+    std::string order_inv_str = "static_particle_order";
     {
         FieldSpec1D<double> p;
         p.get_device_field = [this]{ return &this->mass; };

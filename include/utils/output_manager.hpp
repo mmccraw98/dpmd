@@ -469,9 +469,21 @@ private:
                 if (ispec.preprocess) ispec.preprocess();
                 auto* idev = ispec.get_device_field ? ispec.get_device_field() : nullptr;
                 if (!idev) throw std::runtime_error("index field has null device pointer: " + idx_name);
-                std::vector<int> inv(static_cast<std::size_t>(idev->size()));
-                idev->to_host(inv);
-                out.index_cache.emplace(idx_name, std::move(inv));
+
+                const int N = idev->size();
+                std::vector<int> canonical_to_current(static_cast<std::size_t>(N));
+                idev->to_host(canonical_to_current);
+
+                std::vector<int> current_to_canonical(static_cast<std::size_t>(N));
+                for (int canonical = 0; canonical < N; ++canonical) {
+                    const int current = canonical_to_current[static_cast<std::size_t>(canonical)];
+                    if (current < 0 || current >= N) {
+                        throw std::runtime_error("capture_registry_to_host: index field '" + idx_name + "' contains out-of-range value");
+                    }
+                    current_to_canonical[static_cast<std::size_t>(current)] = canonical;
+                }
+
+                out.index_cache.emplace(idx_name, std::move(current_to_canonical));
                 ok = true;
             }
         }, iit->second);
@@ -524,7 +536,6 @@ private:
             std::visit([&](auto& hb) {
                 using T = typename std::decay_t<decltype(hb)>::value_type;
                 if (hb.index_name.empty() || hb.index_name == name) return;
-                std::cout << "apply_reindex: " << name << std::endl;
                 auto it = t.index_cache.find(hb.index_name);
                 if (it == t.index_cache.end()) throw std::runtime_error("apply_reindex: missing index cache for '" + hb.index_name + "'");
                 const std::vector<int>& inv = it->second;

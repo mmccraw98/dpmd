@@ -422,11 +422,11 @@ public:
     void output_build_registry_impl(io::OutputRegistry& reg) {
         // Register poly-specific fields
         using io::FieldSpec1D; using io::FieldSpec2D;
-        std::string order_inv_str = "order_inv";
-        // Provide vertex reindexing map (new index -> original) so saved trajectories remain contiguous
+        std::string order_inv_str = "static_particle_order";
+        // Provide the canonical->current vertex permutation so OutputManager can rebuild the original layout
         {
             FieldSpec1D<int> p;
-            p.get_device_field = [this]{ return &this->order; };
+            p.get_device_field = [this]{ return &this->static_particle_order; };
             reg.fields[order_inv_str] = p;
         }
         {

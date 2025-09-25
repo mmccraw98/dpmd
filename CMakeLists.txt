@@ -115,7 +115,7 @@ set(TEST_SOURCES
     # tests/nve_rigid_bumpy_wall_final.cu
     # tests/jam_rigid_bumpy_wall_final.cu
     # tests/rigid_bumpy_equilibrate_wall.cu
-    # tests/rigid_bumpy_equilibrate_pbc.cu
+    tests/rigid_bumpy_equilibrate_pbc.cu
     # tests/box_sample_rigid_bumpy_wall_final.cu
     # tests/domain_sample_rigid_bumpy_wall_final.cu
     tests/test_rb_cell_list.cu

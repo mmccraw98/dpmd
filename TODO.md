@@ -1,5 +1,7 @@
 // TODO: validate ordering for disks!
-
+// TODO: WHEN USING PAIR_IDS WITH CELL LIST FOR POINT PARTICLES, PAIR_IDS ARE NOT THE STATIC PARTICLE IDS!
+// TODO: base particle can only have system-level output registry (non ordered) data
+// TODO: point particle and poly particle should implement particle/vertex -level output registry (ordered) data
 // TODO: add a force flag to the check neighbors that forces a rebuild when using cell list.  use that option on the restore last state function
 // TODO: rename cell aux -> cell write, add to base particle
 // TODO: throw an error in output manager if a field is acccessed that does not exist

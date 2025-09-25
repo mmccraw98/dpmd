@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 10, true);
     om.set_extra_init_fields({"pe_total", "ke_total", "packing_fraction"});
     om.set_extra_final_fields({"pe_total", "ke_total", "packing_fraction"});
-    om.set_trajectory_fields({"pos", "angle", "ke_total", "pe_total", "temperature", "vel", "angular_vel", "vertex_pos"});
+    om.set_trajectory_fields({"pos", "angle"});
     om.set_trajectory_interval(save_increment);
     om.initialize();
 
@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     std::cout << "Running for " << n_steps << " steps" << std::endl;
     for (int i = 0; i < n_steps; i++) {
         vv.step();
-        om.step(i);
+        // om.step(i);
         if (i % 10000 == 0) {
             std::cout << "Step " << i << std::endl;
         }
