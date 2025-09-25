@@ -28,9 +28,9 @@ void bind_system_globals(const int* d_system_offset,
 
 void bind_neighbor_globals(const int* d_neighbor_start,
                            const int* d_neighbor_ids,
-                           const double* d_verlet_skin,
+                           const double* d_neighbor_cutoff,
                            const double* d_thresh2) {
-    NeighborConst h { d_neighbor_start, d_neighbor_ids, d_verlet_skin, d_thresh2 };
+    NeighborConst h { d_neighbor_start, d_neighbor_ids, d_neighbor_cutoff, d_thresh2 };
     cudaMemcpyToSymbol(g_neigh, &h, sizeof(NeighborConst));
 }
 

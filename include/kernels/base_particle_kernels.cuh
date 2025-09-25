@@ -29,7 +29,7 @@ struct SystemConst {
 struct NeighborConst {
     const int*    start; // length = n_particles+1
     const int*    ids;   // length = total_neighbors
-    const double* skin;  // length = n_systems
+    const double* cutoff;  // length = n_systems
     const double* thresh2; // length = n_systems
 };
 
@@ -61,7 +61,7 @@ __host__ void bind_system_globals(const int*    d_system_offset,
                                   int           n_vertices);
 __host__ void bind_neighbor_globals(const int*    d_neighbor_start,
                                     const int*    d_neighbor_ids,
-                                    const double* d_verlet_skin,
+                                    const double* d_neighbor_cutoff,
                                     const double* d_thresh2);
 __host__ void bind_cell_globals(const double* d_cell_size_x,
                                 const double* d_cell_size_y,

@@ -1177,7 +1177,6 @@ void RigidBumpy::reorder_particles_impl() {
     );
     thrust::gather(this->order.begin(), this->order.end(), src, dst);
     this->vertex_pos.swap(); this->vertex_force.swap(); this->vertex_mass.swap(); this->vertex_rad.swap(); this->vertex_particle_id.swap(); this->cell_id.swap();
-
     this->build_static_particle_order();
 }
 

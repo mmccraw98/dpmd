@@ -1,3 +1,4 @@
+// TODO: when using single vertex rigid bumpy particles, the cell list 2nd rebuild has a memory access error
 // TODO: validate ordering for disks!
 // TODO: WHEN USING PAIR_IDS WITH CELL LIST FOR POINT PARTICLES, PAIR_IDS ARE NOT THE STATIC PARTICLE IDS!
 // TODO: base particle can only have system-level output registry (non ordered) data

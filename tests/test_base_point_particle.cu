@@ -58,8 +58,8 @@ int main() {
     const double rad = std::sqrt((0.5 * box_size * box_size) / (M_PI * num_particles_per_system));
     P.rad.fill(rad);
     const double verlet_skin = box_size * box_size;  // overestimation to force all possible particles to be neighbors
-    P.verlet_skin.fill(verlet_skin);
-    const double thresh2 = (0.5 * verlet_skin) * (0.5 * verlet_skin);  // threshold squared for each system for neighbor list rebuild
+    P.neighbor_cutoff.fill(neighbor_cutoff);
+    const double thresh2 = (0.5 * neighbor_cutoff) * (0.5 * neighbor_cutoff);  // threshold squared for each system for neighbor list rebuild
     P.thresh2.fill(thresh2);
 
     std::vector<double> pos_x(N), pos_y(N);
@@ -228,7 +228,7 @@ int main() {
         Q.box_size.fill(box_size, box_size);
         Q.sync_box();
         Q.rad.fill(rad);
-        Q.verlet_skin.fill(10.0 * box_size * box_size);
+        Q.neighbor_cutoff.fill(10.0 * box_size * box_size);
 
         // Build host positions: 2 per global cell
         std::vector<double> x2(N2), y2(N2);

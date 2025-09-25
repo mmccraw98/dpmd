@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
         P.allocate_systems(S);
         P.allocate_particles(N);
 
-        P.verlet_skin.from_host(host_skin);
+        P.neighbor_cutoff.from_host(host_skin);
         P.thresh2.from_host(host_thresh2);
         P.system_id.from_host(host_system_id);
         P.system_size.from_host(host_system_size);

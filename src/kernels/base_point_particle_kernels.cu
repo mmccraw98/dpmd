@@ -61,7 +61,7 @@ __global__ void count_cell_neighbors_kernel(
     const double box_size_y   = md::geo::g_box.size_y[sid];
     const double box_inv_x    = md::geo::g_box.inv_x[sid];
     const double box_inv_y    = md::geo::g_box.inv_y[sid];
-    const double skin         = md::geo::g_neigh.skin[sid];
+    const double cutoff         = md::geo::g_neigh.cutoff[sid];
 
     const double xi = x[i], yi = y[i], ri = rad[i];
 
@@ -87,7 +87,7 @@ __global__ void count_cell_neighbors_kernel(
                 double dxp, dyp;
                 const double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dxp, dyp);
 
-                const double cut = (ri + rj + skin);
+                const double cut = (ri + rj + cutoff);
                 if (r2 < cut * cut) ++count;
             }
         }
@@ -122,7 +122,7 @@ __global__ void fill_neighbors_cell_kernel(
     const double box_size_y   = md::geo::g_box.size_y[sid];
     const double box_inv_x    = md::geo::g_box.inv_x[sid];
     const double box_inv_y    = md::geo::g_box.inv_y[sid];
-    const double skin         = md::geo::g_neigh.skin[sid];
+    const double cutoff         = md::geo::g_neigh.cutoff[sid];
 
     const double xi = x[i], yi = y[i], ri = rad[i];
 
@@ -147,7 +147,7 @@ __global__ void fill_neighbors_cell_kernel(
                 double dxp, dyp;
                 const double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dxp, dyp);
 
-                const double cut = (ri + rj + skin);
+                const double cut = (ri + rj + cutoff);
                 if (r2 < cut * cut) {
                     neighbor_ids[w++] = j;
                 }

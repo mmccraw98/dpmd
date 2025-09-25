@@ -115,7 +115,7 @@ __global__ void count_vertex_cell_neighbors_kernel(
     const double box_size_y = md::geo::g_box.size_y[sid];
     const double box_inv_x = md::geo::g_box.inv_x[sid];
     const double box_inv_y = md::geo::g_box.inv_y[sid];
-    const double skin = md::geo::g_neigh.skin[sid];
+    const double cutoff = md::geo::g_neigh.cutoff[sid];
 
     const double xi = vertex_pos_x[i], yi = vertex_pos_y[i], ri = vertex_rad[i];
 
@@ -139,7 +139,7 @@ __global__ void count_vertex_cell_neighbors_kernel(
                 const double xj = vertex_pos_x[j], yj = vertex_pos_y[j], rj = vertex_rad[j];
                 double dxp, dyp;
                 const double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dxp, dyp);
-                const double cut = (ri + rj + skin);
+                const double cut = (ri + rj + cutoff);
                 if (r2 < cut * cut) ++count;
             }
         }
@@ -175,7 +175,7 @@ __global__ void fill_vertex_cell_neighbor_list_kernel(
     const double box_size_y = md::geo::g_box.size_y[sid];
     const double box_inv_x = md::geo::g_box.inv_x[sid];
     const double box_inv_y = md::geo::g_box.inv_y[sid];
-    const double skin = md::geo::g_neigh.skin[sid];
+    const double cutoff = md::geo::g_neigh.cutoff[sid];
 
     const double xi = vertex_pos_x[i], yi = vertex_pos_y[i], ri = vertex_rad[i];
 
@@ -198,7 +198,7 @@ __global__ void fill_vertex_cell_neighbor_list_kernel(
                 const double xj = vertex_pos_x[j], yj = vertex_pos_y[j], rj = vertex_rad[j];
                 double dxp, dyp;
                 const double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dxp, dyp);
-                const double cut = (ri + rj + skin);
+                const double cut = (ri + rj + cutoff);
                 if (r2 < cut * cut) neighbor_ids[w++] = j;
             }
         }

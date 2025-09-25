@@ -53,7 +53,7 @@ public:
     df::DeviceField2D<double> cell_inv;          // (S,2) [1/Lx,1/Ly] - inverse of the cell size for each system
     df::DeviceField2D<int>    cell_dim;          // (S,2) [Nx,Ny] - number of cells in each dimension for each system
     df::DeviceField1D<int>    cell_system_start; // (S+1,) - starting index of the cells for each system in the cell_ids list
-    df::DeviceField1D<double> verlet_skin;       // (S,) - verlet skin for each system
+    df::DeviceField1D<double> neighbor_cutoff;   // (S,) - neighbor cutoff for each system
     df::DeviceField1D<double> thresh2;           // (S,) - threshold squared for each system for neighbor list rebuild
 
 
@@ -177,7 +177,7 @@ public:
                 cell_size.from_host(read_vector_2d<double>(group, "cell_size"));
                 cell_dim.from_host(read_vector_2d<int>(group, "cell_dim"));
                 cell_system_start.from_host(read_vector<int>(group, "cell_system_start"));
-                verlet_skin.from_host(read_vector<double>(group, "verlet_skin"));
+                neighbor_cutoff.from_host(read_vector<double>(group, "neighbor_cutoff"));
                 thresh2.from_host(read_vector<double>(group, "thresh2"));
             } else {
                 throw std::runtime_error("BaseParticle::load_static_from_hdf5_group: invalid neighbor method");
@@ -322,10 +322,10 @@ public:
     void allocate_systems(int S) {
         box_size.resize(S); box_inv.resize(S); system_size.resize(S); system_offset.resize(S+1);
         packing_fraction.resize(S); pressure.resize(S); temperature.resize(S); pe_total.resize(S); ke_total.resize(S);
-        verlet_skin.resize(S); thresh2.resize(S); cub_sys_agg.resize(S);
+        neighbor_cutoff.resize(S); thresh2.resize(S); cub_sys_agg.resize(S);
         box_size.fill(0.0, 0.0); box_inv.fill(0.0, 0.0); system_size.fill(0); system_offset.fill(0);
         packing_fraction.fill(0.0); pressure.fill(0.0); temperature.fill(0.0); pe_total.fill(0.0); ke_total.fill(0.0);
-        verlet_skin.fill(0.0); thresh2.fill(0.0); cub_sys_agg.fill(0);
+        neighbor_cutoff.fill(0.0); thresh2.fill(0.0); cub_sys_agg.fill(0);
         n_dof.resize(S); n_dof.fill(0.0);
         derived().allocate_systems_impl(S);
     }
@@ -349,7 +349,7 @@ public:
 
     // Bind neighbor data to device memory
     void sync_neighbors() {
-        geo::bind_neighbor_globals(neighbor_start.ptr(), neighbor_ids.ptr(), verlet_skin.ptr(), thresh2.ptr());
+        geo::bind_neighbor_globals(neighbor_start.ptr(), neighbor_ids.ptr(), neighbor_cutoff.ptr(), thresh2.ptr());
     }
 
     // Bind cell data to device memory
@@ -644,7 +644,7 @@ public:
     std::vector<std::string> get_static_field_names() {
         std::vector<std::string> static_names {"system_id", "system_size", "system_offset", "box_size"};
         if (get_neighbor_method() == NeighborMethod::Cell) {
-            std::vector<std::string> cell_names {"cell_size", "cell_dim", "cell_system_start", "verlet_skin", "thresh2"};
+            std::vector<std::string> cell_names {"cell_size", "cell_dim", "cell_system_start", "neighbor_cutoff", "thresh2"};
             static_names.insert(static_names.end(), cell_names.begin(), cell_names.end());
         }
         std::vector<std::string> derived_names = derived().get_static_field_names_impl();
@@ -732,8 +732,8 @@ public:
         }
         {
             FieldSpec1D<double> p; 
-            p.get_device_field = [this]{ return &this->verlet_skin; };
-            reg.fields["verlet_skin"] = p;
+            p.get_device_field = [this]{ return &this->neighbor_cutoff; };
+            reg.fields["neighbor_cutoff"] = p;
         }
         {
             FieldSpec1D<double> p; 
