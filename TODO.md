@@ -1,19 +1,19 @@
+// TODO: validate ordering for disks!
+
+// TODO: add a force flag to the check neighbors that forces a rebuild when using cell list.  use that option on the restore last state function
+// TODO: rename cell aux -> cell write, add to base particle
+// TODO: throw an error in output manager if a field is acccessed that does not exist
 // TODO: calculate system-average velocity
 // TODO: add center-of-mass velocity cancelling
 
 // TODO: implement system averaging (like system segmented sum but then divided by system size)
 
-// TODO: implement stress - make sure the stress tensor for rigid bodies is used!  i am not sure it is right otherwise
-// TODO: implement pressure
-
 // TODO: implement hessian
 // TODO: define units
 // TODO: define proper energy scale for rigid bumpy particles
 // TODO: if rigid bumpy particle with core requires multiple energy scales, implement them
+// TODO: add mixed-energy interaction case (compile option?) (is this something that can be handled by just scaling by the diameter?)
 // TODO: validate rigid bumpy particle with core
-
-// TODO: add cell list to rigid bumpy particle
-
 
 // TODO: fix the init writing (if input and output directories are the same, the init should NEVER be overwritten)
 
@@ -22,7 +22,6 @@
 // TODO: add energy file
 // TODO: output manager configs
 
-
 // TODO: probably should NOT be writing anything in init that doesnt exist already, whether in append mode or not
 
 // TODO: add a way to manually save an array to trajectory under the current step with optional array indices to save:
@@ -30,7 +29,7 @@
 // TODO: redesign all data so that it is all saved arbitrarily many times at different timesteps - when you index the data at a given step, each value is defined as its most recent saved state
 // TODO: add a save method that saves only elements from a given index
 // TODO: add pairwise calculations (contacts), add hessian, add stress, add pressure
-// TODO: add relevant plotting to python library - plot, animate, draw contact network
+// TODO: add relevant plotting to python library - plot, animate, draw contact network, color by array
 // TODO: add box resizing
 // TODO: add box resizing - needs to sync with cell sizes and resize particle positions
 // TODO: remove redundancy in the packing fraction box resizing calculations
@@ -68,7 +67,7 @@
 // TODO: implement various cell list schemes for rigid particles (vertex level vs particle level)
 // TODO: add a rigid particle with core
 // TODO: profile kernel size
-// TODO: profile speed vs system size and number of particles - how to speed up?  - what is ideal dimension?
+// TODO: profile speed vs system size and number of particles - how to speed up? - what is ideal dimension?
 
 // TODO: build system-concatenated data from separate data inputs
 
@@ -77,11 +76,10 @@
 // TODO: when setting random positions, may want to add a branch for updating displacements and cell-list rebuild flag or at least enforce a neighbor rebuild?
 
 // Later:
-// TODO: implement a morton or hilbert based cell list stencil
-// TODO: raise certain common methods to higher-level classes (some components of the neighbor list)
+// TODO: implement a morton or hilbert based cell list stencil // TODO: raise certain common methods to higher-level classes (some components of the neighbor list)
 // TODO: overhaul job manager
-//      - non-blocking job db - cannot crash if mulitple accesses occur
-//      - break jobs into blocks (initialization, program run, post process)
-//      - if a block fails, resume it
+// - non-blocking job db - cannot crash if mulitple accesses occur
+// - break jobs into blocks (initialization, program run, post process)
+// - if a block fails, resume it
 
 // TODO: implement all prior scripts

@@ -18,6 +18,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
 #include <type_traits>
 #include <utility>
 
@@ -83,6 +84,11 @@ template<class T>
 struct has_output_build_registry_poly_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().output_build_registry_poly_extras_impl(std::declval<io::OutputRegistry&>()))>> : std::true_type {};
 
+template<class T, class = void>
+struct has_init_cell_neighbors_poly_extras_impl : std::false_type {};
+template<class T>
+struct has_init_cell_neighbors_poly_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().init_cell_neighbors_poly_extras_impl())>> : std::true_type {};
 
 namespace md {
 
@@ -112,6 +118,8 @@ public:
     df::DeviceField1D<int>           particle_neighbor_ids;    // (N_particle_neighbors,) - list of particle ids for the vertex neighbors
     df::DeviceField1D<int>           particle_neighbor_start;  // (N+1,) - starting index of the neighbor list for a given particle in the particle_neighbor_ids list
     df::DeviceField1D<int>           particle_neighbor_count;  // (N,) - number of neighbors for each particle
+
+    df::DeviceField1D<int>           static_particle_order;    // (Nv,) - stores the updated vertex indices in the expected particle_offset block order - essential for iterating over the vertices of a given particle!
 
     inline static constexpr CellSortMethod cell_sort_method = CellSortMethod::Bucket;  // default sort method for the cell list
 
@@ -143,6 +151,8 @@ public:
         this->vertex_rad.fill(0.0);
         this->vertex_particle_id.fill(0);
         this->vertex_system_id.fill(0);
+        this->static_particle_order.resize(Nv);  // initially, the list is just the vertex indices
+        thrust::sequence(this->static_particle_order.begin(), this->static_particle_order.end(), 0);
         if constexpr (has_allocate_poly_vertex_extras_impl<Derived>::value)
             this->derived().allocate_poly_vertex_extras_impl(Nv);
     }
@@ -162,21 +172,17 @@ public:
     // Enable/disable the swap for the point particle system
     void enable_swap_impl(bool enable) {
         if (enable) {
-            this->n_vertices_per_particle.enable_swap();
             this->vertex_pos.enable_swap();
             this->vertex_vel.enable_swap();
             this->vertex_force.enable_swap();
-            this->vertex_pe.enable_swap();
             this->vertex_mass.enable_swap();
             this->vertex_rad.enable_swap();
             this->vertex_particle_id.enable_swap();
             this->cell_id.enable_swap();
         } else {
-            this->n_vertices_per_particle.disable_swap();
             this->vertex_pos.disable_swap();
             this->vertex_vel.disable_swap();
             this->vertex_force.disable_swap();
-            this->vertex_pe.disable_swap();
             this->vertex_mass.disable_swap();
             this->vertex_rad.disable_swap();
             this->vertex_particle_id.disable_swap();
@@ -218,17 +224,44 @@ public:
 
     // Initialize the cell neighbors
     void init_cell_neighbors_impl() {
-        throw std::runtime_error("BasePolyParticle::init_cell_neighbors_impl is not implemented");
+        int Nv = this->n_vertices();
+        this->cell_id.resize(Nv);
+        this->order.resize(Nv);
+        this->order_inv.resize(Nv);
+        this->neighbor_count.resize(Nv);
+        this->neighbor_start.resize(Nv + 1);
+        this->cell_aux.resize(this->n_cells());
+        if constexpr (has_init_cell_neighbors_poly_extras_impl<Derived>::value)
+            this->derived().init_cell_neighbors_poly_extras_impl();
     }
 
     // Update the cell neighbors
     void update_cell_neighbors_impl() {
-        throw std::runtime_error("BasePolyParticle::update_cell_neighbors_impl is not implemented");
+        int C = this->n_cells();
+        int Nv = this->n_vertices();
+        // 1) assign cell ids to each vertex
+        this->_assign_cell_ids();
+        // 2) rebuild the cell layout using bucket, 
+        // count the number of vertices in each cell,
+        // determine the starting vertex index for each cell,
+        // and determine the vertex order and inverse order
+        this->_rebuild_cell_layout();
+        // 3) use the order array to rearrange the vertex data so that spatially nearby vertices are nearby in the relevant data arrays
+        this->reorder_particles();
+        // 4) count the number of neighbors for each vertex
+        this->_count_cell_neighbors();
+        // 5) scan the neighbor counts to get the starting index of each vertex's neighbor list
+        const int total_neighbors = this->n_neighbors();
+        thrust::exclusive_scan(this->neighbor_count.begin(), this->neighbor_count.end(), this->neighbor_start.begin());
+        this->neighbor_start.set_element(Nv, total_neighbors);
+        this->neighbor_ids.resize(total_neighbors);
+        // 6) create the neighbor list, again enumerating over the 9-cell stencil
+        this->_fill_cell_neighbors();
     }
 
     // Sync class constants with pass-through to sub-class for any extra constants
     void sync_class_constants_impl() {
-        md::poly::bind_poly_globals(this->vertex_particle_id.ptr(), this->particle_offset.ptr(), this->n_vertices_per_particle.ptr());
+        md::poly::bind_poly_globals(this->vertex_particle_id.ptr(), this->particle_offset.ptr(), this->n_vertices_per_particle.ptr(), this->static_particle_order.ptr());
         if constexpr (has_sync_class_constants_poly_extras_impl<Derived>::value)
             this->derived().sync_class_constants_poly_extras_impl();
         cudaDeviceSynchronize();
@@ -242,6 +275,17 @@ public:
     // Return total number of vertices
     int n_vertices_impl() const {
         return this->vertex_pos.size();
+    }
+
+    // Build the static particle order list
+    void build_static_particle_order() {
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(this->n_particles());
+        CUDA_LAUNCH(
+            md::poly::build_static_particle_order_kernel, G, B,
+            this->order_inv.ptr(),
+            this->static_particle_order.ptr()
+        );
     }
 
     // Build the particle-level neighbor list from the vertex-level neighbor list
@@ -379,6 +423,23 @@ public:
         // Register poly-specific fields
         using io::FieldSpec1D; using io::FieldSpec2D;
         std::string order_inv_str = "order_inv";
+        // Provide vertex reindexing map (new index -> original) so saved trajectories remain contiguous
+        {
+            FieldSpec1D<int> p;
+            p.get_device_field = [this]{ return &this->order; };
+            reg.fields[order_inv_str] = p;
+        }
+        {
+            FieldSpec1D<double> p; 
+            p.get_device_field = [this]{ return &this->pe; };
+            reg.fields["pe"] = p;
+        }
+        {
+            FieldSpec1D<double> p; 
+            p.preprocess = [this]{ this->compute_ke(); };
+            p.get_device_field = [this]{ return &this->ke; };
+            reg.fields["ke"] = p;
+        }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->e_interaction; };
@@ -386,7 +447,6 @@ public:
         }
         {
             FieldSpec1D<int> p;
-            p.index_by = [order_inv_str]{ return order_inv_str; };
             p.get_device_field = [this]{ return &this->n_vertices_per_particle; };
             reg.fields["n_vertices_per_particle"] = p;
         }
@@ -418,38 +478,111 @@ public:
         {
             FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_pos; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["vertex_pos"] = p;
         }
         {
             FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_vel; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["vertex_vel"] = p;
         }
         {
             FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_force; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["vertex_force"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_pe; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["vertex_pe"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_mass; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["vertex_mass"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_rad; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["vertex_rad"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_y; };
+            reg.fields["stress_tensor_y"] = p;
+        }
+        {
+            FieldSpec2D<double> p;
+            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_total_x; };
+            reg.fields["stress_tensor_total_x"] = p;
         }
         if constexpr (has_output_build_registry_poly_extras_impl<Derived>::value)
             this->derived().output_build_registry_poly_extras_impl(reg);
     }
 
 private:
+    // Assign global cell ids to each vertex based on their position
+    void _assign_cell_ids() {
+        const int Nv = this->n_vertices();
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(Nv);
+        CUDA_LAUNCH(md::geo::assign_cell_ids_kernel, G, B,
+            Nv,
+            this->vertex_system_id.ptr(),
+            this->vertex_pos.xptr(), this->vertex_pos.yptr(),
+            this->cell_id.ptr()
+        );
+    }
+
+    // Rebuild the cell layout using bucket sort
+    void _rebuild_cell_layout() {
+        const int Nv = this->n_vertices();
+        const int C = this->n_cells();
+        // 1) count the number of vertices in each cell by building a histogram using atomicAdd at the vertex-level
+        this->cell_count.fill(0);
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(Nv);
+        CUDA_LAUNCH(md::geo::count_cells_kernel, G, B,
+            Nv, this->cell_id.ptr(), this->cell_count.ptr()
+        );
+        // 2) determine the starting vertex index (id of first vertex) for each cell
+        thrust::exclusive_scan(this->cell_count.begin(), this->cell_count.end(), this->cell_start.begin(), 0);
+        this->cell_start.set_element(C, Nv);
+        thrust::copy(this->cell_start.begin(), this->cell_start.begin() + C, this->cell_aux.begin());
+        // compute the order and its inverse using atomicAdd at the vertex-level
+        CUDA_LAUNCH(md::geo::scatter_order_kernel, G, B,
+            Nv, this->cell_id.ptr(), this->cell_aux.ptr(), this->order.ptr(), this->order_inv.ptr()
+        );
+    }
+
+    // Count the number of vertices in each cell
+    void _count_cell_neighbors() {
+        const int Nv = this->n_vertices();
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(Nv);
+        CUDA_LAUNCH(md::poly::count_vertex_cell_neighbors_kernel, G, B,
+            this->vertex_pos.xptr(), this->vertex_pos.yptr(), this->vertex_rad.ptr(),
+            this->cell_id.ptr(), this->cell_start.ptr(), this->neighbor_count.ptr()
+        );
+    }
+
+    // Fill the neighbor list for each vertex by enumerating over the 9-cell stencil
+    void _fill_cell_neighbors() {
+        const int Nv = this->n_vertices();
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(Nv);
+        CUDA_LAUNCH(md::poly::fill_vertex_cell_neighbor_list_kernel, G, B,
+            this->vertex_pos.xptr(), this->vertex_pos.yptr(), this->vertex_rad.ptr(),
+            this->cell_id.ptr(), this->cell_start.ptr(), this->neighbor_start.ptr(), this->neighbor_ids.ptr()
+        );
+    }
 
 };
 

@@ -66,6 +66,11 @@ template<class T>
 struct has_output_build_registry_point_extras_impl<T,
     std::void_t<decltype(std::declval<T&>().output_build_registry_point_extras_impl(std::declval<io::OutputRegistry&>()))>> : std::true_type {};
 
+template<class T, class = void>
+struct has_init_cell_neighbors_extras_impl : std::false_type {};
+template<class T>
+struct has_init_cell_neighbors_extras_impl<T,
+    std::void_t<decltype(std::declval<T&>().init_cell_neighbors_extras_impl())>> : std::true_type {};
 
 namespace md {
 
@@ -104,10 +109,16 @@ public:
     // Enable/disable the swap for the point particle system
     void enable_swap_impl(bool enable) {
         if (enable) {
+            this->pos.enable_swap();
+            this->vel.enable_swap();
+            this->force.enable_swap();
             this->mass.enable_swap();
             this->rad.enable_swap();
             this->cell_id.enable_swap();
         } else {
+            this->pos.disable_swap();
+            this->vel.disable_swap();
+            this->force.disable_swap();
             this->mass.disable_swap();
             this->rad.disable_swap();
             this->cell_id.disable_swap();
@@ -159,6 +170,8 @@ public:
         } else {
             this->cell_aux.resize(this->n_particles());
         }
+        if constexpr (has_init_cell_neighbors_extras_impl<Derived>::value)
+            this->derived().init_cell_neighbors_extras_impl();
     }
 
     // Update the cell neighbors
@@ -228,8 +241,41 @@ public:
     // Build the output registry
     void output_build_registry_impl(io::OutputRegistry& reg) {
         // Register point-specific fields
-        std::string order_inv_str = "order_inv";
         using io::FieldSpec1D; using io::FieldSpec2D;
+        std::string order_inv_str = "order_inv";
+        // Override index field with new->old map so snapshots undo spatial reordering
+        {
+            FieldSpec1D<int> p;
+            p.get_device_field = [this]{ return &this->order; };
+            reg.fields[order_inv_str] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_y; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
+            reg.fields["stress_tensor_y"] = p;
+        }
+        {
+            FieldSpec2D<double> p;
+            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_total_x; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
+            reg.fields["stress_tensor_total_x"] = p;
+        }
+        {
+            FieldSpec1D<double> p; 
+            p.get_device_field = [this]{ return &this->pe; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
+            reg.fields["pe"] = p;
+        }
+        {
+            FieldSpec1D<double> p; 
+            p.preprocess = [this]{ this->compute_ke(); };
+            p.get_device_field = [this]{ return &this->ke; };
+            p.index_by = [order_inv_str]{ return order_inv_str; };
+            reg.fields["ke"] = p;
+        }
         {
             io::FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->pos; };
@@ -276,7 +322,9 @@ private:
         const int N = this->n_particles();
         auto B = md::launch::threads_for();
         auto G = md::launch::blocks_for(N);
-        CUDA_LAUNCH(md::point::assign_cell_ids_kernel, G, B,
+        CUDA_LAUNCH(md::geo::assign_cell_ids_kernel, G, B,
+            N,
+            this->system_id.ptr(),
             this->pos.xptr(), this->pos.yptr(),
             this->cell_id.ptr()
         );
@@ -312,16 +360,16 @@ private:
         this->cell_count.fill(0);
         auto B = md::launch::threads_for();
         auto G = md::launch::blocks_for(N);
-        CUDA_LAUNCH(md::point::count_cells_kernel, G, B,
-            this->cell_id.ptr(), N, this->cell_count.ptr()
+        CUDA_LAUNCH(md::geo::count_cells_kernel, G, B,
+            N, this->cell_id.ptr(), this->cell_count.ptr()
         );
         // 2) determine the starting particle index (id of first particle) for each cell
         thrust::exclusive_scan(this->cell_count.begin(), this->cell_count.end(), this->cell_start.begin(), 0);
         this->cell_start.set_element(C, N);
         thrust::copy(thrust::device, this->cell_start.begin(), this->cell_start.begin() + C, this->cell_aux.begin());
         // compute the order and its inverse using atomicAdd at the particle-level
-        CUDA_LAUNCH(md::point::scatter_order_kernel, G, B,
-            this->cell_id.ptr(), N, this->cell_aux.ptr(), this->order.ptr(), this->order_inv.ptr()
+        CUDA_LAUNCH(md::geo::scatter_order_kernel, G, B,
+            N, this->cell_id.ptr(), this->cell_aux.ptr(), this->order.ptr(), this->order_inv.ptr()
         );
 
     }

@@ -71,8 +71,6 @@ public:
 
     // Allocate the point system extras - nothing extra for disks
     void allocate_point_system_extras_impl(int S) {
-        this->rebuild_flag.resize(S);
-        this->rebuild_flag.fill(0u);
     }
 
     // Enable/disable the swap for the point particle system - nothing extra for disks
@@ -134,6 +132,9 @@ public:
 
     // Set the number of degrees of freedom for each system
     void set_n_dof_impl();
+
+    // Initialize the cell neighbors
+    void init_cell_neighbors_extras_impl();
 
 private:
     df::DeviceField2D<double> last_state_pos;

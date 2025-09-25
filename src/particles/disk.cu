@@ -738,9 +738,6 @@ void Disk::sync_class_constants_impl() {
 }
 
 void Disk::reset_displacements_impl() {
-    if (this->last_pos.size() != this->pos.size()) {
-        throw std::runtime_error("Disk::reset_displacements_impl: last_pos and pos must have the same size (likely need to call allocate_particles after setting the neighbor method)");
-    }
     last_pos.copy_from(this->pos);
     disp2.fill(0.0);
 }
@@ -860,9 +857,6 @@ void Disk::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
         this->box_size.xptr(), this->box_size.yptr(), this->last_state_box_size.xptr(), this->last_state_box_size.yptr(),
         flag.ptr(), true_val
     );
-    Base::sync_box();
-    Base::sync_class_constants();
-    Base::check_neighbors();
 }
 
 void Disk::load_static_from_hdf5_point_extras_impl(hid_t group) {
@@ -892,6 +886,13 @@ void Disk::output_build_registry_point_extras_impl(io::OutputRegistry& reg) {
 void Disk::set_n_dof_impl() {
     this->n_dof.copy_from(this->system_size);
     this->n_dof.scale(2);  // 2 translations
+}
+
+void Disk::init_cell_neighbors_extras_impl() {
+    this->last_pos.resize(this->n_particles());
+    this->disp2.resize(this->n_particles());
+    this->rebuild_flag.resize(this->n_systems());
+    this->rebuild_flag.fill(0u);
 }
 
 } // namespace md::disk

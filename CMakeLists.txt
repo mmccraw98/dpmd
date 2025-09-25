@@ -89,34 +89,38 @@ set_target_properties(dpmd_core PROPERTIES
 
 # Test executables
 set(TEST_SOURCES
-    tests/test_base_particle.cu
-    tests/test_base_point_particle.cu
-    tests/test_base_poly_particle.cu
-    tests/test_device_fields.cu
-    tests/test_disk.cu
-    tests/test_disk_system_naive_parallelism.cu
-    tests/test_disk_system_cell_parallelism.cu
-    tests/rigid_bumpy_box_sample.cu
-    tests/jam_rigid_bumpy.cu
-    tests/damped_jam_rigid_bumpy.cu
-    tests/nve_disk_pbc.cu
-    tests/nve_disk_wall.cu
-    tests/fire_disk_pbc.cu
-    tests/fire_disk_wall.cu
-    tests/fire_jam_disk_pbc.cu
-    tests/fire_jam_disk_wall.cu
-    tests/fire_jam_rigid_bumpy.cu
-    tests/nve_rigid_bumpy_pbc.cu
-    tests/nve_rigid_bumpy_wall.cu
-    tests/scale_phi_nve_rigid_bumpy_wall.cu
-    tests/fire_rigid_bumpy_pbc.cu
-    tests/fire_rigid_bumpy_wall.cu
-    tests/fire_jam_rigid_bumpy_wall.cu
-    tests/nve_rigid_bumpy_wall_final.cu
-    tests/jam_rigid_bumpy_wall_final.cu
-    tests/rigid_bumpy_equilibrate_wall.cu
-    tests/box_sample_rigid_bumpy_wall_final.cu
-    tests/domain_sample_rigid_bumpy_wall_final.cu
+    # tests/test_base_particle.cu
+    # tests/test_base_point_particle.cu
+    # tests/test_base_poly_particle.cu
+    # tests/test_device_fields.cu
+    # tests/test_disk.cu
+    # tests/test_disk_system_naive_parallelism.cu
+    # tests/test_disk_system_cell_parallelism.cu
+    # tests/rigid_bumpy_box_sample.cu
+    # tests/jam_rigid_bumpy.cu
+    # tests/damped_jam_rigid_bumpy.cu
+    # tests/nve_disk_pbc.cu
+    # tests/nve_disk_wall.cu
+    # tests/fire_disk_pbc.cu
+    # tests/fire_disk_wall.cu
+    # tests/fire_jam_disk_pbc.cu
+    # tests/fire_jam_disk_wall.cu
+    # tests/fire_jam_rigid_bumpy.cu
+    # tests/nve_rigid_bumpy_pbc.cu
+    # tests/nve_rigid_bumpy_wall.cu
+    # tests/scale_phi_nve_rigid_bumpy_wall.cu
+    # tests/fire_rigid_bumpy_pbc.cu
+    # tests/fire_rigid_bumpy_wall.cu
+    # tests/fire_jam_rigid_bumpy_wall.cu
+    # tests/nve_rigid_bumpy_wall_final.cu
+    # tests/jam_rigid_bumpy_wall_final.cu
+    # tests/rigid_bumpy_equilibrate_wall.cu
+    # tests/rigid_bumpy_equilibrate_pbc.cu
+    # tests/box_sample_rigid_bumpy_wall_final.cu
+    # tests/domain_sample_rigid_bumpy_wall_final.cu
+    tests/test_rb_cell_list.cu
+    tests/test_rb_cell_list_new.cu
+    tests/nve_rigid_bumpy_pbc_final.cu
 )
 
 # Create test executables

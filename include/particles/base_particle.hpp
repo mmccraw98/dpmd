@@ -361,18 +361,7 @@ public:
     void sync_class_constants() {derived().sync_class_constants_impl();}
 
     // Enable swap, allocate aux memory in relevant particle-level fields
-    void enable_swap(bool enable) {
-        if (enable) {
-            pos.enable_swap();
-            vel.enable_swap();
-            force.enable_swap();
-        } else {
-            pos.disable_swap();
-            vel.disable_swap();
-            force.disable_swap();
-        }
-        derived().enable_swap_impl(enable);
-    }
+    void enable_swap(bool enable) { derived().enable_swap_impl(enable); }
 
     // Set random positions within the box with padding defaulting to 0.0
     void set_random_positions(double box_pad_x=0.0, double box_pad_y=0.0) { derived().set_random_positions_impl(box_pad_x, box_pad_y); }
@@ -408,7 +397,12 @@ public:
     void init_cell_neighbors() { enable_swap(true); init_cell_sizes(); sync_cells(); derived().init_cell_neighbors_impl(); }
 
     // Update the cell neighbor list
-    void update_cell_neighbors() { derived().update_cell_neighbors_impl(); sync_cells(); sync_neighbors(); reset_displacements(); }
+    void update_cell_neighbors() {
+        derived().update_cell_neighbors_impl();
+        sync_cells();
+        sync_neighbors();
+        reset_displacements();
+    }
 
     // Check the cell neighbor list
     void check_cell_neighbors() { if (derived().check_cell_neighbors_impl()) update_cell_neighbors(); }
@@ -472,7 +466,7 @@ public:
 
         thrust::device_vector<int> n_cell(S, 0);
 
-        const int B = 256;
+        auto B = md::launch::threads_for();
         auto G = md::launch::blocks_for(S);
         CUDA_LAUNCH(md::geo::init_cell_sizes_kernel, G, B,
             S,
@@ -617,20 +611,25 @@ public:
 
     // Save current state
     void save_state() {
-        const int N = n_particles();
+        const int S = n_systems();
         const int true_val = 1;
-        df::DeviceField1D<int> flag; flag.resize(N); flag.fill(true_val);
+        df::DeviceField1D<int> flag; flag.resize(S); flag.fill(true_val);
         save_state(flag, true_val);
     }
 
     // Restore to last saved state using a flag array (true_val == restore, otherwise don't restore)
-    void restore_state(df::DeviceField1D<int> flag, int true_val) { derived().restore_state_impl(flag, true_val); }
+    void restore_state(df::DeviceField1D<int> flag, int true_val) {
+        derived().restore_state_impl(flag, true_val);
+        sync_box();
+        sync_class_constants();
+        check_neighbors();
+    }
 
     // Restore to last saved state
     void restore_state() {
-        const int N = n_particles();
+        const int S = n_systems();
         const int true_val = 1;
-        df::DeviceField1D<int> flag; flag.resize(N); flag.fill(true_val);
+        df::DeviceField1D<int> flag; flag.resize(S); flag.fill(true_val);
         restore_state(flag, true_val);
     }
 
@@ -663,30 +662,9 @@ public:
     void output_build_registry(io::OutputRegistry& reg) {
         std::string order_inv_str = "order_inv";
         using io::FieldSpec1D; using io::FieldSpec2D;
-        // questions on this:
-        // do we need the index space?  what does it do?
-        // for things that dont have an index or an ensure_ready function call, can we leave it blank to de-clutter the code?
-        // do we need to pass the dimensionality if we are already specifying Provider1D / 2D?  seems redundant
-        // for arrays that can be reordered (if relevant), would it be easier to pass the reorder array to the Provider as we do the array itself? then could leave it blank for arrays that dont support reordering
-        // can we implement a heirarchical dependency calculation system so that we dont duplicate ensure_ready calculations?
-        // relatedly, we may want to rename ensure_ready to handle_dependencies or something like that
-        {
-            FieldSpec1D<double> p; 
-            p.get_device_field = [this]{ return &this->pe; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
-            reg.fields["pe"] = p;
-        }
-        {
-            FieldSpec1D<double> p; 
-            p.preprocess = [this]{ this->compute_ke(); };
-            p.get_device_field = [this]{ return &this->ke; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
-            reg.fields["ke"] = p;
-        }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->area; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["area"] = p;
         }
         // {  // not sure how to handle this one
@@ -841,18 +819,6 @@ public:
             p.preprocess = [this]{ this->compute_stress_tensor(); };
             p.get_device_field = [this]{ return &this->stress_tensor_x; };
             reg.fields["stress_tensor_x"] = p;
-        }
-        {
-            FieldSpec2D<double> p; 
-            p.preprocess = [this]{ this->compute_stress_tensor(); };
-            p.get_device_field = [this]{ return &this->stress_tensor_y; };
-            reg.fields["stress_tensor_y"] = p;
-        }
-        {
-            FieldSpec2D<double> p;
-            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
-            p.get_device_field = [this]{ return &this->stress_tensor_total_x; };
-            reg.fields["stress_tensor_total_x"] = p;
         }
         {
             FieldSpec2D<double> p;

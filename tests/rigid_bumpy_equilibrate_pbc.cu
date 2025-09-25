@@ -1,0 +1,33 @@
+#include "particles/rigid_bumpy.cuh"
+#include "utils/h5_io.hpp"
+#include "utils/device_fields.cuh"
+#include "utils/cuda_utils.cuh"
+#include "routines/minimizers.cuh"
+#include "integrators/velocity_verlet.cuh"
+#include "utils/output_manager.hpp"
+
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <in_path> <out_path>" << std::endl;
+        return 1;
+    }
+    std::string in_path = argv[1];
+    std::string out_path = argv[2];
+    const double dt_scale = 1e-2;
+
+    md::rigid_bumpy::RigidBumpy P;
+    P.load_from_hdf5(in_path, "init");
+    
+    io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 1, false);
+    om.set_trajectory_interval(1);
+    om.set_extra_init_fields({"pe_total"});
+    om.set_extra_final_fields({"pe_total"});
+    om.initialize();
+
+    df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);
+    std::cout << "Minimizing" << std::endl;
+    md::routines::minimize_fire(P, dt, 1e6, 1e-16, 1e-16);
+    std::cout << "Done" << std::endl;
+
+    om.finalize();
+}

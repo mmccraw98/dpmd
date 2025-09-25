@@ -229,4 +229,29 @@ __device__ __forceinline__ double dist_pbc_global(double xi, double yi,
     return sqrt(dist2_pbc_global(xi, yi, xj, yj, sid));
 }
 
+// Common cell list kernels
+
+// Assign the cell ids to the particles based on their positions
+__global__ void assign_cell_ids_kernel(
+    const int N,
+    const int* __restrict__ system_id,
+    const double* __restrict__ x,
+    const double* __restrict__ y,
+    int* __restrict__ cell_id);
+
+// Count the number of particles in each cell
+__global__ void count_cells_kernel(
+    int N,
+    const int* __restrict__ cell_id,
+    int* __restrict__ counts);
+
+// Scatter the particle order based on the cell ids
+__global__ void scatter_order_kernel(
+    const int N,
+    const int* __restrict__ cell_id,
+    int* __restrict__ write_ptr,
+    int* __restrict__ order,
+    int* __restrict__ order_inv);
+
+
 }} // namespace md::geo

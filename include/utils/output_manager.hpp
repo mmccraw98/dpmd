@@ -524,6 +524,7 @@ private:
             std::visit([&](auto& hb) {
                 using T = typename std::decay_t<decltype(hb)>::value_type;
                 if (hb.index_name.empty() || hb.index_name == name) return;
+                std::cout << "apply_reindex: " << name << std::endl;
                 auto it = t.index_cache.find(hb.index_name);
                 if (it == t.index_cache.end()) throw std::runtime_error("apply_reindex: missing index cache for '" + hb.index_name + "'");
                 const std::vector<int>& inv = it->second;

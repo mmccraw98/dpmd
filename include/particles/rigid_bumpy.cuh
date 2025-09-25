@@ -11,13 +11,14 @@ struct RigidBumpyConst {  // TODO: should add more to this once the class is ful
     const double* vertex_rad;
     const double* mass;
     const double* moment_inertia;
+    unsigned int* rebuild_flag;
 };
 
 // Rigid Bumpy-specific device constants
 extern __constant__ RigidBumpyConst g_rigid_bumpy;
 
 // Bind the rigid bumpy constants to the device
-void bind_rigid_bumpy_globals(const double* d_e_interaction, const double* d_vertex_rad, const double* d_mass, const double* d_moment_inertia);
+void bind_rigid_bumpy_globals(const double* d_e_interaction, const double* d_vertex_rad, const double* d_mass, const double* d_moment_inertia, unsigned int* d_rebuild_flag);
 
 // Rigid Bumpy particle class
 class RigidBumpy : public md::BasePolyParticle<md::rigid_bumpy::RigidBumpy> {
@@ -27,7 +28,7 @@ public:
     using Base = md::BasePolyParticle<md::rigid_bumpy::RigidBumpy>;
 
     // ---- Rigid Bumpy-specific fields ----
-    df::DeviceField2D<double>       last_pos;       // (N,2) - positions of the particles when neighbor list was last built
+    df::DeviceField2D<double>       last_pos;       // (N,2) - positions of the first vertex in each particle when neighbor list was last built
     df::DeviceField1D<double>       disp2;          // (N,) - displacement squared since last pos was written
     df::DeviceField1D<unsigned int> rebuild_flag;   // (S,) - rebuild flag for each system
     df::DeviceField1D<double>       angle;          // (N,) - angle of the particle
@@ -116,6 +117,9 @@ public:
     // Compute the stress tensor for each system
     void compute_stress_tensor_impl();
 
+    // Initialize the cell neighbors
+    void init_cell_neighbors_poly_extras_impl();
+
     void save_state_impl(df::DeviceField1D<int> flag, int true_val);
 
     void restore_state_impl(df::DeviceField1D<int> flag, int true_val);
@@ -147,6 +151,7 @@ private:
     df::DeviceField2D<double> last_state_vertex_pos;
     df::DeviceField1D<int> last_state_vertex_particle_id;
     df::DeviceField2D<double> last_state_box_size;
+    df::DeviceField1D<int> last_state_static_particle_order;
 };
 
 }
