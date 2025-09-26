@@ -273,10 +273,10 @@ public:
     }
 
     // Check if neighbors need to be updated, if so, call update_neighbors()
-    void check_neighbors() {
+    void check_neighbors(bool force_update=false) {
         switch (neighbor_method) {
             case NeighborMethod::Naive: break;  // do nothing
-            case NeighborMethod::Cell:  check_cell_neighbors();   break;
+            case NeighborMethod::Cell:  check_cell_neighbors(force_update);   break;
         }
     }
 
@@ -405,7 +405,7 @@ public:
     }
 
     // Check the cell neighbor list
-    void check_cell_neighbors() { if (derived().check_cell_neighbors_impl()) update_cell_neighbors(); }
+    void check_cell_neighbors(bool force_update=false) { if (force_update || derived().check_cell_neighbors_impl()) update_cell_neighbors(); }
 
     // Reorder the particle data by the order array (or some other internal ordering logic)
     // resync the class constants after reordering to ensure the globals are updated
@@ -413,6 +413,36 @@ public:
 
     // Reset the displacements of the particles to the current positions
     void reset_displacements() { derived().reset_displacements_impl(); }
+
+    // Update the cell size given the box size and the number of cells per dimension
+    void update_cell_size() {
+        const int S = n_systems();
+        if (S == 0) return;
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(S);
+        CUDA_LAUNCH(md::geo::update_cell_size_kernel, G, B,
+            S, box_size.xptr(), box_size.yptr(), cell_dim.xptr(), cell_dim.yptr(), cell_size.xptr(), cell_size.yptr(), cell_inv.xptr(), cell_inv.yptr());
+        sync_cells();
+    }
+
+    // Set the temperature of the systems by scaling the velocities
+    void set_temperature(df::DeviceField1D<double> temperature_target) {
+        compute_temperature();  // get current temperature
+        df::DeviceField1D<double> scale; scale.resize(n_systems());
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(n_systems());
+        CUDA_LAUNCH(md::geo::compute_temperature_scale_factor_kernel, G, B,
+            temperature.ptr(), temperature_target.ptr(), scale.ptr()
+        );
+        set_average_velocity();
+        scale_velocities(scale);
+    }
+
+    // Overload for a single temperature target
+    void set_temperature(double temperature_target) {
+        df::DeviceField1D<double> temperature_target_df; temperature_target_df.resize(n_systems()); temperature_target_df.fill(temperature_target);
+        set_temperature(temperature_target_df);
+    }
 
     // Scale the velocities of the particles
     void scale_velocities(df::DeviceField1D<double> scale) { derived().scale_velocities_impl(scale); }
@@ -424,8 +454,53 @@ public:
         scale_velocities(scale_df);
     }
 
+    // Calculate the average velocity of the systems
+    df::DeviceField2D<double> calculate_average_velocity() { return derived().calculate_average_velocity_impl(); }
+
+    // Set the average velocity of the systems to a desired vector
+    void set_average_velocity(df::DeviceField2D<double> average_velocity) { derived().set_average_velocity_impl(average_velocity); }
+
+    // Overload for a single average velocity
+    void set_average_velocity(double average_velocity_x, double average_velocity_y) {
+        df::DeviceField2D<double> average_velocity; average_velocity.resize(n_systems()); average_velocity.fill(average_velocity_x, average_velocity_y);
+        set_average_velocity(average_velocity);
+    }
+
+    // Overload for zero velocity
+    void set_average_velocity() {
+        df::DeviceField2D<double> average_velocity; average_velocity.resize(n_systems()); average_velocity.fill(0.0, 0.0);
+        set_average_velocity(average_velocity);
+    }
+
     // Scale the positions of the particles
     void scale_positions(df::DeviceField1D<double> scale) { derived().scale_positions_impl(scale); }
+
+    // Change the packing fraction by a set increment using an affine scaling of the box size and positions
+    void increment_packing_fraction(df::DeviceField1D<double> increment) {
+        compute_packing_fraction();
+        const int S = n_systems();
+        if (S == 0) return;
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(S);
+        df::DeviceField1D<double> scale_factor; scale_factor.resize(S); scale_factor.fill(1.0);
+        CUDA_LAUNCH(md::geo::scale_box_by_increment_kernel, G, B,
+            S, box_size.xptr(), box_size.yptr(), packing_fraction.ptr(), increment.ptr(), scale_factor.ptr()
+        );
+        scale_positions(scale_factor);
+        if (neighbor_method == NeighborMethod::Cell) {
+            update_cell_size();
+        }
+        sync_box();
+        check_neighbors(true);
+        compute_packing_fraction();
+    }
+
+    // Overload for a single increment
+    void increment_packing_fraction(double increment) {
+        const int S = n_systems();
+        df::DeviceField1D<double> increment_df; increment_df.resize(S); increment_df.fill(increment);
+        increment_packing_fraction(increment_df);
+    }
 
     // Compute the kinetic energy of each particle
     void compute_ke() { derived().compute_ke_impl(); }
@@ -622,7 +697,7 @@ public:
         derived().restore_state_impl(flag, true_val);
         sync_box();
         sync_class_constants();
-        check_neighbors();
+        check_neighbors(true);  // force a neighbor list rebuild
     }
 
     // Restore to last saved state
@@ -821,6 +896,18 @@ public:
             reg.fields["stress_tensor_x"] = p;
         }
         {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_y; };
+            reg.fields["stress_tensor_y"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_total_x; };
+            reg.fields["stress_tensor_total_x"] = p;
+        }
+        {
             FieldSpec2D<double> p;
             p.preprocess = [this]{ this->compute_stress_tensor_total(); };
             p.get_device_field = [this]{ return &this->stress_tensor_total_y; };
@@ -922,6 +1009,8 @@ protected:
     void sync_class_constants_impl() {}
     void mix_velocities_and_forces_impl(double) {}
     void scale_velocities_impl(double) {}
+    df::DeviceField2D<double> calculate_average_velocity_impl() { return df::DeviceField2D<double>(0, 0); }
+    void set_average_velocity_impl(df::DeviceField2D<double>) {}
     void update_positions_impl(double, double) {}
     void update_velocities_impl(double, double) {}
     void reorder_particles_impl() {}

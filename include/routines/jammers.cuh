@@ -122,12 +122,15 @@ void jam_binary_search_pbc(
         );
 
         // sync the box, system, neighbors, cells, and class constants - TODO: find a better way to do this?
+        if (P.neighbor_method == NeighborMethod::Cell) {
+            P.update_cell_size();
+        }
         P.sync_box();
         P.sync_system();
         P.sync_neighbors();
         P.sync_cells();
         P.sync_class_constants();
-        P.update_neighbors();
+        P.check_neighbors(true);
         P.compute_packing_fraction();
 
         // scale the positions
@@ -217,13 +220,16 @@ void jam_binary_search_wall(
         );
 
         // sync the box, system, neighbors, cells, and class constants - TODO: find a better way to do this?
+        if (P.neighbor_method == NeighborMethod::Cell) {
+            P.update_cell_size();
+        }
         P.sync_box();
         P.sync_system();
         P.sync_neighbors();
         P.sync_cells();
         P.sync_class_constants();
         // P.update_neighbors();
-        P.check_neighbors();
+        P.check_neighbors(true);
         P.compute_packing_fraction();
 
         // scale the positions

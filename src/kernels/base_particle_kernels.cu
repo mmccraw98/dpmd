@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <cassert>
 #include "kernels/base_particle_kernels.cuh"
 #include "utils/cuda_utils.cuh"
 
@@ -120,6 +121,64 @@ __global__ void compute_temperature_kernel(
     const int S = g_sys.n_systems;
     if (s >= S) return;
     temperature[s] = ke_total[s] * 2.0 / (n_dof[s]);
+}
+
+__global__ void compute_temperature_scale_factor_kernel(
+    const double* __restrict__ temperature,
+    const double* __restrict__ temperature_target,
+    double* __restrict__ scale_factor
+) {
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = g_sys.n_systems;
+    if (s >= S) return;
+    scale_factor[s] = sqrt(temperature_target[s] / temperature[s]);
+}
+
+__global__ void scale_box_by_increment_kernel(
+    const int S,
+    double* __restrict__ box_size_x,
+    double* __restrict__ box_size_y,
+    const double* __restrict__ packing_fraction,
+    const double* __restrict__ increment,
+    double* __restrict__ scale_factor
+) {
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    if (s >= S) return;
+    const double box_size_x_s = box_size_x[s];
+    const double box_size_y_s = box_size_y[s];
+    const double packing_fraction_s = packing_fraction[s];
+    const double new_packing_fraction_s = packing_fraction_s + increment[s];
+
+    assert(packing_fraction_s > 0.0);
+    assert(new_packing_fraction_s > 0.0);
+
+    const double scale = sqrt(packing_fraction_s / new_packing_fraction_s);
+    scale_factor[s] = scale;
+    box_size_x[s] = box_size_x_s * scale;
+    box_size_y[s] = box_size_y_s * scale;
+}
+
+__global__ void update_cell_size_kernel(
+    const int S,
+    const double* __restrict__ box_size_x,
+    const double* __restrict__ box_size_y,
+    const int* __restrict__ cell_dim_x,
+    const int* __restrict__ cell_dim_y,
+    double* __restrict__ cell_size_x,
+    double* __restrict__ cell_size_y,
+    double* __restrict__ cell_inv_x,
+    double* __restrict__ cell_inv_y
+) {
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    if (s >= S) return;
+    const double lx = box_size_x[s];
+    const double ly = box_size_y[s];
+    const int nx = cell_dim_x[s];
+    const int ny = cell_dim_y[s];
+    cell_size_x[s] = lx / nx;
+    cell_size_y[s] = ly / ny;
+    cell_inv_x[s] = 1.0 / cell_size_x[s];
+    cell_inv_y[s] = 1.0 / cell_size_y[s];
 }
 
 __global__ void assign_cell_ids_kernel(

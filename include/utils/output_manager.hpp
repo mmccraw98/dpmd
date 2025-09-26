@@ -189,12 +189,8 @@ public:
         bool meta_exists = false, traj_exists = false;
 
         if (enable_meta_) {
-            if (!append_mode_ && std::filesystem::exists(meta_path_)) {
-                std::filesystem::remove(meta_path_);
-            }
-
-            const bool want_append = append_mode_ && std::filesystem::exists(meta_path_);
-            if (want_append) {
+            const bool have_existing_meta = std::filesystem::exists(meta_path_);
+            if (have_existing_meta) {
                 hid_t f = H5Fopen(meta_path_.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
                 if (f >= 0) {
                     meta_file_ = f;
@@ -495,7 +491,9 @@ private:
         std::size_t bytes = 0;
         for (const auto& name : names) {
             auto it = reg.fields.find(name);
-            if (it == reg.fields.end()) continue;
+            if (it == reg.fields.end()) {
+                throw std::runtime_error("capture_registry_to_host: field '" + name + "' not found");
+            }
             const FieldSpecVariant& spec = it->second;
             std::visit([&](const auto& s) {
                 using SpecT = std::decay_t<decltype(s)>;

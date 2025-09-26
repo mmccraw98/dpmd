@@ -116,11 +116,14 @@ set(TEST_SOURCES
     # tests/jam_rigid_bumpy_wall_final.cu
     # tests/rigid_bumpy_equilibrate_wall.cu
     tests/rigid_bumpy_equilibrate_pbc.cu
+    tests/disk_equilibrate_pbc.cu
     # tests/box_sample_rigid_bumpy_wall_final.cu
     # tests/domain_sample_rigid_bumpy_wall_final.cu
     tests/test_rb_cell_list.cu
     tests/test_rb_cell_list_new.cu
     tests/nve_rigid_bumpy_pbc_final.cu
+    tests/nve_disk_pbc_final.cu
+    tests/damped_dynamics_compress_to_packing_fraction.cu
 )
 
 # Create test executables

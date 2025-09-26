@@ -229,7 +229,37 @@ __device__ __forceinline__ double dist_pbc_global(double xi, double yi,
     return sqrt(dist2_pbc_global(xi, yi, xj, yj, sid));
 }
 
+// Compute the temperature scale factor
+__global__ void compute_temperature_scale_factor_kernel(
+    const double* __restrict__ temperature,
+    const double* __restrict__ temperature_target,
+    double* __restrict__ scale_factor
+);
+
+// Scale the box size given a packing fraction increment
+__global__ void scale_box_by_increment_kernel(
+    const int S,
+    double* __restrict__ box_size_x,
+    double* __restrict__ box_size_y,
+    const double* __restrict__ packing_fraction,
+    const double* __restrict__ increment,
+    double* __restrict__ scale_factor
+);
+
 // Common cell list kernels
+
+// Update the cell size given the box size and the number of cells per dimension
+__global__ void update_cell_size_kernel(
+    const int S,
+    const double* __restrict__ box_size_x,
+    const double* __restrict__ box_size_y,
+    const int* __restrict__ cell_dim_x,
+    const int* __restrict__ cell_dim_y,
+    double* __restrict__ cell_size_x,
+    double* __restrict__ cell_size_y,
+    double* __restrict__ cell_inv_x,
+    double* __restrict__ cell_inv_y
+);
 
 // Assign the cell ids to the particles based on their positions
 __global__ void assign_cell_ids_kernel(

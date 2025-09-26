@@ -1,13 +1,14 @@
+// TODO: make particle-agnostic loading method and scripts
+// TODO: fix bugs with memory access, probably due to improperly formatted input data
+// TODO: add output manager configs and run argument configs - probably the same thing
+// TODO: make stress tensor (for poly particles) a vertex-level operation 
+// TODO: make pairwise interactions (for poly particles) a vertex-level operation - sum to particle level using vertex particle id comparison
 // TODO: when using single vertex rigid bumpy particles, the cell list 2nd rebuild has a memory access error
 // TODO: validate ordering for disks!
 // TODO: WHEN USING PAIR_IDS WITH CELL LIST FOR POINT PARTICLES, PAIR_IDS ARE NOT THE STATIC PARTICLE IDS!
 // TODO: base particle can only have system-level output registry (non ordered) data
 // TODO: point particle and poly particle should implement particle/vertex -level output registry (ordered) data
-// TODO: add a force flag to the check neighbors that forces a rebuild when using cell list.  use that option on the restore last state function
 // TODO: rename cell aux -> cell write, add to base particle
-// TODO: throw an error in output manager if a field is acccessed that does not exist
-// TODO: calculate system-average velocity
-// TODO: add center-of-mass velocity cancelling
 
 // TODO: implement system averaging (like system segmented sum but then divided by system size)
 
@@ -18,7 +19,6 @@
 // TODO: add mixed-energy interaction case (compile option?) (is this something that can be handled by just scaling by the diameter?)
 // TODO: validate rigid bumpy particle with core
 
-// TODO: fix the init writing (if input and output directories are the same, the init should NEVER be overwritten)
 
 // TODO: simplify the output manager
 // TODO: add support for different logging schemes (linear, logarithmic)

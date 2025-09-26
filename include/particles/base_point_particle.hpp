@@ -199,7 +199,7 @@ public:
     }
 
     // Load static data from hdf5 group and initialize the particle
-    void load_static_from_hdf5_point_extras_impl(hid_t group) {
+    void load_static_from_hdf5_group_impl(hid_t group) {
         this->e_interaction.from_host(read_vector<double>(group, "e_interaction"));
         this->mass.from_host(read_vector<double>(group, "mass"));
         this->rad.from_host(read_vector<double>(group, "rad"));
@@ -208,9 +208,9 @@ public:
     }
 
     // Load from hdf5 group and initialize the particle
-    void load_from_hdf5_point_extras_impl(hid_t group) {
+    void load_from_hdf5_group_impl(hid_t group) {
         if (h5_link_exists(group, "pos")) {
-            this->pos.from_host(read_vector_2d<double>(group, "pos"));  // required so not wrapped in a H5Aexists check
+            this->pos.from_host(read_vector_2d<double>(group, "pos"));
         }
         if (h5_link_exists(group, "vel")) {
             this->vel.from_host(read_vector_2d<double>(group, "vel"));

@@ -60,6 +60,12 @@ public:
     // Scale the velocities of the particles
     void scale_velocities_impl(df::DeviceField1D<double> scale);
 
+    // Calculate the average velocity of the systems
+    df::DeviceField2D<double> calculate_average_velocity_impl();
+
+    // Set the average velocity of the systems
+    void set_average_velocity_impl(df::DeviceField2D<double> average_velocity);
+
     // Scale the positions of the particles
     void scale_positions_impl(df::DeviceField1D<double> scale);
 

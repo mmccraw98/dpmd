@@ -1039,6 +1039,49 @@ __global__ void reset_displacements_kernel(
     disp2[i] = 0.0;
 }
 
+__global__ void calculate_average_velocity_kernel(
+    const double* __restrict__ vel_x,
+    const double* __restrict__ vel_y,
+    double* __restrict__ average_velocity_x,
+    double* __restrict__ average_velocity_y
+) {
+    const int S = md::geo::g_sys.n_systems;
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    if (s >= S) return;
+    double avg_vel_x = 0.0;
+    double avg_vel_y = 0.0;
+    const int beg = md::geo::g_sys.offset[s];
+    const int end = md::geo::g_sys.offset[s+1];
+    for (int i = beg; i < end; ++i) {
+        avg_vel_x += vel_x[i];
+        avg_vel_y += vel_y[i];
+    }
+    average_velocity_x[s] = avg_vel_x / (end - beg);
+    average_velocity_y[s] = avg_vel_y / (end - beg);
+}
+
+__global__ void set_average_velocity_kernel(
+    double* __restrict__ vel_x,
+    double* __restrict__ vel_y,
+    const double* __restrict__ average_velocity_x,
+    const double* __restrict__ average_velocity_y,
+    const double* __restrict__ current_average_velocity_x,
+    const double* __restrict__ current_average_velocity_y
+) {
+    const int S = md::geo::g_sys.n_systems;
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    if (s >= S) return;
+    const int beg = md::geo::g_sys.offset[s];
+    const int end = md::geo::g_sys.offset[s+1];
+    const double avg_vel_x = current_average_velocity_x[s] - average_velocity_x[s];
+    const double avg_vel_y = current_average_velocity_y[s] - average_velocity_y[s];
+    for (int i = beg; i < end; ++i) {  // subtract the current mean, add back the desired mean
+        vel_x[i] -= avg_vel_x;
+        vel_y[i] -= avg_vel_y;
+    }
+}
+
+
 } // namespace kernels
 
 void RigidBumpy::compute_particle_forces() {
@@ -1126,6 +1169,30 @@ void RigidBumpy::scale_velocities_impl(df::DeviceField1D<double> scale) {
     auto G = md::launch::blocks_for(N);
     CUDA_LAUNCH(kernels::scale_velocities_kernel, G, B,
         this->vel.xptr(), this->vel.yptr(), this->angular_vel.ptr(), scale.ptr());
+}
+
+df::DeviceField2D<double> RigidBumpy::calculate_average_velocity_impl() {
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    df::DeviceField2D<double> average_velocity; average_velocity.resize(n_systems());
+    CUDA_LAUNCH(kernels::calculate_average_velocity_kernel, G, B,
+        this->vel.xptr(), this->vel.yptr(),
+        average_velocity.xptr(), average_velocity.yptr()
+    );
+    return average_velocity;
+}
+
+void RigidBumpy::set_average_velocity_impl(df::DeviceField2D<double> average_velocity) {
+    df::DeviceField2D<double> current_average_velocity = this->calculate_average_velocity();
+    const int N = n_particles();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::set_average_velocity_kernel, G, B,
+        this->vel.xptr(), this->vel.yptr(),
+        average_velocity.xptr(), average_velocity.yptr(),
+        current_average_velocity.xptr(), current_average_velocity.yptr()
+    );
 }
 
 void RigidBumpy::scale_positions_impl(df::DeviceField1D<double> scale) {
