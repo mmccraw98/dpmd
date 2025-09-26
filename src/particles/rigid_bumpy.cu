@@ -54,7 +54,7 @@ __global__ void update_positions_kernel_naive(
     const int end = md::poly::g_poly.particle_offset[i+1];
     double s, c; sincos(new_angle_i - angle_i, &s, &c);
     for (int j = beg; j < end; ++j) {
-        const int j_index = md::poly::g_poly.static_particle_order[j];
+        const int j_index = md::poly::g_poly.static_index[j];
         double dx = vertex_x[j_index] - x_i;
         double dy = vertex_y[j_index] - y_i;
         double rx = c*dx - s*dy;
@@ -105,7 +105,7 @@ __global__ void update_positions_kernel_cell(
     const int end = md::poly::g_poly.particle_offset[i+1];
     double s, c; sincos(new_angle_i - angle_i, &s, &c);
     for (int j = beg; j < end; ++j) {
-        const int j_index = md::poly::g_poly.static_particle_order[j];
+        const int j_index = md::poly::g_poly.static_index[j];
         double dx = vertex_x[j_index] - x_i;
         double dy = vertex_y[j_index] - y_i;
         double rx = c*dx - s*dy;
@@ -115,7 +115,7 @@ __global__ void update_positions_kernel_cell(
     }
     // Calculate squared displacement for neighbor list update
     // use the position of the first vertex in each particle
-    const int first_vertex_index = md::poly::g_poly.static_particle_order[beg];
+    const int first_vertex_index = md::poly::g_poly.static_index[beg];
     double dx = vertex_x[first_vertex_index] - last_x[i];
     double dy = vertex_y[first_vertex_index] - last_y[i];
     double d2 = dx * dx + dy * dy;
@@ -354,7 +354,7 @@ __global__ void compute_particle_forces_kernel(
     int beg = md::poly::g_poly.particle_offset[i];
     int end = md::poly::g_poly.particle_offset[i+1];
     for (int j = beg; j < end; ++j) {
-        const int j_index = md::poly::g_poly.static_particle_order[j];
+        const int j_index = md::poly::g_poly.static_index[j];
         vertex_force_x_i = vertex_force_x[j_index];
         vertex_force_y_i = vertex_force_y[j_index];
         fxi += vertex_force_x_i;
@@ -408,7 +408,7 @@ __global__ void set_random_positions_in_box_kernel(
     // Displace and rotate all vertices
     double s, c; sincos(new_angle_i - angle_i, &s, &c);
     for (int j = 0; j < n_vertices_per_particle; ++j) {
-        const int j_index = md::poly::g_poly.static_particle_order[particle_offset + j];
+        const int j_index = md::poly::g_poly.static_index[particle_offset + j];
         double dx = vertex_pos_x[j_index] - pos_xi;
         double dy = vertex_pos_y[j_index] - pos_yi;
         double rx = c*dx - s*dy;
@@ -489,7 +489,7 @@ __global__ void set_random_positions_in_domains_kernel(
     double pos_x_i = pos_x[particle_id];
     double pos_y_i = pos_y[particle_id];
     for (int j = 0; j < n_vertices_per_particle; ++j) {
-        const int j_index = md::poly::g_poly.static_particle_order[particle_offset + j];
+        const int j_index = md::poly::g_poly.static_index[particle_offset + j];
         double dx = vertex_pos_x[j_index] - pos_x_i;
         double dy = vertex_pos_y[j_index] - pos_y_i;
         double rx = c*dx - s*dy;
@@ -578,7 +578,7 @@ __global__ void scale_positions_kernel(
     y[i] = new_pos_y;
 
     for (int j = beg; j < end; j++) {
-        const int j_index = md::poly::g_poly.static_particle_order[j];
+        const int j_index = md::poly::g_poly.static_index[j];
         vertex_x[j_index] += (new_pos_x - pos_x);
         vertex_y[j_index] += (new_pos_y - pos_y);
     }
@@ -657,7 +657,7 @@ __global__ void save_vertex_state_kernel(
     const double* __restrict__ vertex_rad, double* __restrict__ last_vertex_rad,
     const double* __restrict__ vertex_pos_x, const double* __restrict__ vertex_pos_y, double* __restrict__ last_vertex_pos_x, double* __restrict__ last_vertex_pos_y,
     const int* __restrict__ vertex_particle_id, int* __restrict__ last_vertex_particle_id,
-    const int* __restrict__ static_particle_order, int* __restrict__ last_static_particle_order,
+    const int* __restrict__ static_index, int* __restrict__ last_static_index,
     const int* __restrict__ flag, const int true_val
 ) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -669,7 +669,7 @@ __global__ void save_vertex_state_kernel(
         last_vertex_pos_x[i] = vertex_pos_x[i];
         last_vertex_pos_y[i] = vertex_pos_y[i];
         last_vertex_particle_id[i] = vertex_particle_id[i];
-        last_static_particle_order[i] = static_particle_order[i];
+        last_static_index[i] = static_index[i];
     }
 }
 
@@ -713,7 +713,7 @@ __global__ void restore_vertex_state_kernel(
     double* __restrict__ vertex_pos_x, const double* __restrict__ last_vertex_pos_x,
     double* __restrict__ vertex_pos_y, const double* __restrict__ last_vertex_pos_y,
     int* __restrict__ vertex_particle_id, const int* __restrict__ last_vertex_particle_id,
-    int* __restrict__ static_particle_order, const int* __restrict__ last_static_particle_order,
+    int* __restrict__ static_index, const int* __restrict__ last_static_index,
     const int* __restrict__ flag, const int true_val
 ) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -725,7 +725,7 @@ __global__ void restore_vertex_state_kernel(
         vertex_pos_x[i] = last_vertex_pos_x[i];
         vertex_pos_y[i] = last_vertex_pos_y[i];
         vertex_particle_id[i] = last_vertex_particle_id[i];
-        static_particle_order[i] = last_static_particle_order[i];
+        static_index[i] = last_static_index[i];
     }
 }
 
@@ -780,7 +780,7 @@ __global__ void count_particle_contacts_kernel(
         int j = particle_neighbor_ids[p_k];
         int num_interacting_vertices = 0;
         for (int v_i = md::poly::g_poly.particle_offset[i]; v_i < md::poly::g_poly.particle_offset[i+1]; v_i++) {  // loop over the vertices of the particle
-            const int v_i_index = md::poly::g_poly.static_particle_order[v_i];  // get the real vertex index
+            const int v_i_index = md::poly::g_poly.static_index[v_i];  // get the real vertex index
             bool found_interaction = false;  // for each vertex of the current particle, check if it is interacting with the neighboring particle
             const double xi = vertex_pos_x[v_i_index], yi = vertex_pos_y[v_i_index];
             const double ri = g_rigid_bumpy.vertex_rad[v_i_index];
@@ -852,7 +852,7 @@ __global__ void compute_friction_coeff_kernel(
         const double xj = pos_x[j], yj = pos_y[j];
         double r_particle = sqrt(md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dist_x, dist_y));
         for (int v_i = md::poly::g_poly.particle_offset[i]; v_i < md::poly::g_poly.particle_offset[i+1]; v_i++) {  // loop over the vertices of the particle
-            const int v_i_index = md::poly::g_poly.static_particle_order[v_i];  // get the real vertex index
+            const int v_i_index = md::poly::g_poly.static_index[v_i];  // get the real vertex index
             const double vxi = vertex_pos_x[v_i_index], vyi = vertex_pos_y[v_i_index];
             const double ri = g_rigid_bumpy.vertex_rad[v_i_index];
             const int v_beg = md::geo::g_neigh.start[v_i_index];
@@ -966,7 +966,7 @@ __global__ void compute_stress_tensor_kernel(
     int condition = (n_vertices_per_particle > 1) ? 1.0 : 0.0;
 
     for (int v = beg; v < end; v++) {
-        const int v_index = md::poly::g_poly.static_particle_order[v];  // get the real vertex index
+        const int v_index = md::poly::g_poly.static_index[v];  // get the real vertex index
         const double vxi = vertex_pos_x[v_index], vyi = vertex_pos_y[v_index];
         const double ri = g_rigid_bumpy.vertex_rad[v_index];
         const double mass = vertex_mass[v_index];
@@ -1033,7 +1033,7 @@ __global__ void reset_displacements_kernel(
     const int N = md::geo::g_sys.n_particles;
     if (i >= N) return;
     const int beg = md::poly::g_poly.particle_offset[i];
-    const int first_vertex_index = md::poly::g_poly.static_particle_order[beg];
+    const int first_vertex_index = md::poly::g_poly.static_index[beg];
     last_pos_x[i] = vertex_pos_x[first_vertex_index];
     last_pos_y[i] = vertex_pos_y[first_vertex_index];
     disp2[i] = 0.0;
@@ -1244,7 +1244,6 @@ void RigidBumpy::reorder_particles_impl() {
     );
     thrust::gather(this->order.begin(), this->order.end(), src, dst);
     this->vertex_pos.swap(); this->vertex_force.swap(); this->vertex_mass.swap(); this->vertex_rad.swap(); this->vertex_particle_id.swap(); this->cell_id.swap();
-    this->build_static_particle_order();
 }
 
 bool RigidBumpy::check_cell_neighbors_impl() {
@@ -1462,8 +1461,8 @@ void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
     if (this->last_state_n_vertices_per_particle.size() != this->n_vertices_per_particle.size()) {
         this->last_state_n_vertices_per_particle.resize(this->n_vertices_per_particle.size());
     }
-    if (this->last_state_static_particle_order.size() != this->static_particle_order.size()) {
-        this->last_state_static_particle_order.resize(this->static_particle_order.size());
+    if (this->last_state_static_index.size() != this->static_index.size()) {
+        this->last_state_static_index.resize(this->static_index.size());
     }
     
     const int N = n_particles();
@@ -1484,7 +1483,7 @@ void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
         this->vertex_rad.ptr(), this->last_state_vertex_rad.ptr(),
         this->vertex_pos.xptr(), this->vertex_pos.yptr(), this->last_state_vertex_pos.xptr(), this->last_state_vertex_pos.yptr(),
         this->vertex_particle_id.ptr(), this->last_state_vertex_particle_id.ptr(),
-        this->static_particle_order.ptr(), this->last_state_static_particle_order.ptr(),
+        this->static_index.ptr(), this->last_state_static_index.ptr(),
         flag.ptr(), true_val);
 
     CUDA_LAUNCH(kernels::save_system_state_kernel, G_S, B,
@@ -1521,8 +1520,8 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     if (this->last_state_n_vertices_per_particle.size() != this->n_vertices_per_particle.size()) {
         throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_n_vertices_per_particle is not initialized");
     }
-    if (this->last_state_static_particle_order.size() != this->static_particle_order.size()) {
-        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_static_particle_order is not initialized");
+    if (this->last_state_static_index.size() != this->static_index.size()) {
+        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_static_index is not initialized");
     }
 
     const int N = n_particles();
@@ -1544,7 +1543,7 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
         this->vertex_pos.xptr(), this->last_state_vertex_pos.xptr(),
         this->vertex_pos.yptr(), this->last_state_vertex_pos.yptr(),
         this->vertex_particle_id.ptr(), this->last_state_vertex_particle_id.ptr(),
-        this->static_particle_order.ptr(), this->last_state_static_particle_order.ptr(),
+        this->static_index.ptr(), this->last_state_static_index.ptr(),
         flag.ptr(), true_val);
     CUDA_LAUNCH(kernels::restore_system_state_kernel, G_S, B,
         this->box_size.xptr(), this->box_size.yptr(), this->last_state_box_size.xptr(), this->last_state_box_size.yptr(),
@@ -1602,7 +1601,7 @@ std::vector<std::string> RigidBumpy::get_state_field_names_poly_extras_impl() {
 void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg) {
     // Register rigid bumpy specific fields
     using io::FieldSpec1D; using io::FieldSpec2D;
-    std::string order_inv_str = "static_particle_order";
+    std::string order_str = "static_index";
     {
         FieldSpec1D<double> p;
         p.get_device_field = [this]{ return &this->mass; };

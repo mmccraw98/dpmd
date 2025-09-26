@@ -157,7 +157,7 @@ private:
     df::DeviceField2D<double> last_state_vertex_pos;
     df::DeviceField1D<int> last_state_vertex_particle_id;
     df::DeviceField2D<double> last_state_box_size;
-    df::DeviceField1D<int> last_state_static_particle_order;
+    df::DeviceField1D<int> last_state_static_index;
 };
 
 }

@@ -119,8 +119,6 @@ public:
     df::DeviceField1D<int>           particle_neighbor_start;  // (N+1,) - starting index of the neighbor list for a given particle in the particle_neighbor_ids list
     df::DeviceField1D<int>           particle_neighbor_count;  // (N,) - number of neighbors for each particle
 
-    df::DeviceField1D<int>           static_particle_order;    // (Nv,) - stores the updated vertex indices in the expected particle_offset block order - essential for iterating over the vertices of a given particle!
-
     inline static constexpr CellSortMethod cell_sort_method = CellSortMethod::Bucket;  // default sort method for the cell list
 
     // Allocate the particles
@@ -151,8 +149,8 @@ public:
         this->vertex_rad.fill(0.0);
         this->vertex_particle_id.fill(0);
         this->vertex_system_id.fill(0);
-        this->static_particle_order.resize(Nv);  // initially, the list is just the vertex indices
-        thrust::sequence(this->static_particle_order.begin(), this->static_particle_order.end(), 0);
+        this->static_index.resize(Nv);
+        thrust::sequence(this->static_index.begin(), this->static_index.end(), 0);
         if constexpr (has_allocate_poly_vertex_extras_impl<Derived>::value)
             this->derived().allocate_poly_vertex_extras_impl(Nv);
     }
@@ -228,6 +226,8 @@ public:
         this->cell_id.resize(Nv);
         this->order.resize(Nv);
         this->order_inv.resize(Nv);
+        this->static_index.resize(Nv);
+        thrust::sequence(this->static_index.begin(), this->static_index.end(), 0);
         this->neighbor_count.resize(Nv);
         this->neighbor_start.resize(Nv + 1);
         this->cell_aux.resize(this->n_cells());
@@ -259,9 +259,17 @@ public:
         this->_fill_cell_neighbors();
     }
 
+    // Update the static index
+    void update_static_index_impl() {
+        int Nv = this->n_vertices();
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(Nv);
+        CUDA_LAUNCH(md::geo::update_static_index_kernel, G, B, Nv, this->order_inv.ptr(), this->static_index.ptr());
+    }
+
     // Sync class constants with pass-through to sub-class for any extra constants
     void sync_class_constants_impl() {
-        md::poly::bind_poly_globals(this->vertex_particle_id.ptr(), this->particle_offset.ptr(), this->n_vertices_per_particle.ptr(), this->static_particle_order.ptr());
+        md::poly::bind_poly_globals(this->vertex_particle_id.ptr(), this->particle_offset.ptr(), this->n_vertices_per_particle.ptr(), this->static_index.ptr());
         if constexpr (has_sync_class_constants_poly_extras_impl<Derived>::value)
             this->derived().sync_class_constants_poly_extras_impl();
         cudaDeviceSynchronize();
@@ -275,17 +283,6 @@ public:
     // Return total number of vertices
     int n_vertices_impl() const {
         return this->vertex_pos.size();
-    }
-
-    // Build the static particle order list
-    void build_static_particle_order() {
-        auto B = md::launch::threads_for();
-        auto G = md::launch::blocks_for(this->n_particles());
-        CUDA_LAUNCH(
-            md::poly::build_static_particle_order_kernel, G, B,
-            this->order_inv.ptr(),
-            this->static_particle_order.ptr()
-        );
     }
 
     // Build the particle-level neighbor list from the vertex-level neighbor list
@@ -422,12 +419,12 @@ public:
     void output_build_registry_impl(io::OutputRegistry& reg) {
         // Register poly-specific fields
         using io::FieldSpec1D; using io::FieldSpec2D;
-        std::string order_inv_str = "static_particle_order";
+        std::string order_str = "static_index";
         // Provide the canonical->current vertex permutation so OutputManager can rebuild the original layout
         {
             FieldSpec1D<int> p;
-            p.get_device_field = [this]{ return &this->static_particle_order; };
-            reg.fields[order_inv_str] = p;
+            p.get_device_field = [this]{ return &this->static_index; };
+            reg.fields[order_str] = p;
         }
         {
             FieldSpec1D<double> p; 
@@ -458,6 +455,7 @@ public:
         {
             FieldSpec1D<int> p; 
             p.get_device_field = [this]{ return &this->vertex_particle_id; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vertex_particle_id"] = p;
         }
         {
@@ -478,37 +476,37 @@ public:
         {
             FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_pos; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vertex_pos"] = p;
         }
         {
             FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_vel; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vertex_vel"] = p;
         }
         {
             FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_force; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vertex_force"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_pe; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vertex_pe"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_mass; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vertex_mass"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->vertex_rad; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vertex_rad"] = p;
         }
         {

@@ -49,6 +49,7 @@ public:
     df::DeviceField1D<int>    cell_start;     // (total_cells+1,) - starting particle index of the particles in each cell
     df::DeviceField1D<int>    order;          // (N,) - sorted particle index
     df::DeviceField1D<int>    order_inv;      // (N,) - inverse of the sorted particle index
+    df::DeviceField1D<int>    static_index;   // (N,) - index of the particle in the static order, used for undoing the cell-list sorting
     df::DeviceField2D<double> cell_size;         // (S,2) [Lx,Ly] - size of the cell for each system
     df::DeviceField2D<double> cell_inv;          // (S,2) [1/Lx,1/Ly] - inverse of the cell size for each system
     df::DeviceField2D<int>    cell_dim;          // (S,2) [Nx,Ny] - number of cells in each dimension for each system
@@ -263,13 +264,12 @@ public:
         update_neighbors();
     }
 
-    // Update and build neighbor lists, sync to device once done
+    // Update and build neighbor lists
     void update_neighbors() {
         switch (neighbor_method) {
             case NeighborMethod::Naive: update_naive_neighbors(); break;
             case NeighborMethod::Cell:  update_cell_neighbors();  break;
         }
-        sync_neighbors();
     }
 
     // Check if neighbors need to be updated, if so, call update_neighbors()
@@ -391,14 +391,18 @@ public:
     void init_naive_neighbors() { derived().init_naive_neighbors_impl(); }
 
     // Update and build the naive neighbor list
-    void update_naive_neighbors() { derived().update_naive_neighbors_impl(); }
+    void update_naive_neighbors() { derived().update_naive_neighbors_impl(); sync_neighbors(); }
 
     // Initialize the cell neighbor list and enable array swapping
     void init_cell_neighbors() { enable_swap(true); init_cell_sizes(); sync_cells(); derived().init_cell_neighbors_impl(); }
 
+    // Update the static index
+    void update_static_index() { derived().update_static_index_impl(); }
+
     // Update the cell neighbor list
     void update_cell_neighbors() {
         derived().update_cell_neighbors_impl();
+        update_static_index();
         sync_cells();
         sync_neighbors();
         reset_displacements();
@@ -735,7 +739,6 @@ public:
 
     // Base provides common fields; derived can extend via CRTP hooks
     void output_build_registry(io::OutputRegistry& reg) {
-        std::string order_inv_str = "order_inv";
         using io::FieldSpec1D; using io::FieldSpec2D;
         {
             FieldSpec1D<double> p; 
@@ -918,12 +921,6 @@ public:
             p.preprocess = [this]{ this->compute_stress_tensor(); this->compute_pressure(); };
             p.get_device_field = [this]{ return &this->pressure; };
             reg.fields["pressure"] = p;
-        }
-        // Register the inverse index field itself (1D int) so index_by can find it
-        {
-            FieldSpec1D<int> p;
-            p.get_device_field = [this]{ return &this->order_inv; };
-            reg.fields[order_inv_str] = p;
         }
         derived().output_build_registry_impl(reg);
     }

@@ -248,6 +248,13 @@ __global__ void scale_box_by_increment_kernel(
 
 // Common cell list kernels
 
+// Update the static index
+__global__ void update_static_index_kernel(
+    const int N,
+    const int* __restrict__ order_inv,
+    int* __restrict__ static_index
+);
+
 // Update the cell size given the box size and the number of cells per dimension
 __global__ void update_cell_size_kernel(
     const int S,

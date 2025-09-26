@@ -6,26 +6,13 @@ namespace md::poly {
 __constant__ PolyConst g_poly;
 __constant__ PolySystemConst g_vertex_sys;
 
-void bind_poly_globals(const int* d_particle_id, const int* d_particle_offset, const int* d_n_vertices_per_particle, const int* d_static_particle_order) {
-    PolyConst h { d_particle_id, d_particle_offset, d_n_vertices_per_particle, d_static_particle_order };
+void bind_poly_globals(const int* d_particle_id, const int* d_particle_offset, const int* d_n_vertices_per_particle, const int* d_static_index) {
+    PolyConst h { d_particle_id, d_particle_offset, d_n_vertices_per_particle, d_static_index };
     cudaMemcpyToSymbol(g_poly, &h, sizeof(PolyConst));
 }
 void bind_poly_system_globals(const int* d_vertex_system_offset, const int* d_vertex_system_id, const int* d_vertex_system_size) {
     PolySystemConst h { d_vertex_system_offset, d_vertex_system_id, d_vertex_system_size };
     cudaMemcpyToSymbol(g_vertex_sys, &h, sizeof(PolySystemConst));
-}
-
-__global__ void build_static_particle_order_kernel(
-    const int* __restrict__ order_inv,
-    int* __restrict__ static_particle_order
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    const int N = md::geo::g_sys.n_particles;
-    if (i >= N) return;
-    for (int k = g_poly.particle_offset[i]; k < g_poly.particle_offset[i + 1]; k++) {
-        const int old_vertex_index = static_particle_order[k];
-        static_particle_order[k] = order_inv[old_vertex_index];
-    }
 }
 
 __global__ void count_naive_vertex_neighbors_kernel(

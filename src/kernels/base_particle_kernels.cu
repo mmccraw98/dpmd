@@ -158,6 +158,16 @@ __global__ void scale_box_by_increment_kernel(
     box_size_y[s] = box_size_y_s * scale;
 }
 
+__global__ void update_static_index_kernel(
+    const int N,
+    const int* __restrict__ order_inv,
+    int* __restrict__ static_index
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    static_index[i] = order_inv[static_index[i]];
+}
+
 __global__ void update_cell_size_kernel(
     const int S,
     const double* __restrict__ box_size_x,

@@ -163,6 +163,8 @@ public:
         this->cell_id.resize(N);
         this->order.resize(N);
         this->order_inv.resize(N);
+        this->static_index.resize(N);
+        thrust::sequence(this->static_index.begin(), this->static_index.end(), 0);
         this->neighbor_count.resize(N);
         this->neighbor_start.resize(N + 1);
         if constexpr (cell_sort_method == CellSortMethod::Bucket) {
@@ -196,6 +198,14 @@ public:
         this->neighbor_ids.resize(total_neighbors);
         // 6) create the neighbor list, again enumerating over the 9-cell stencil
         this->_fill_cell_neighbors();
+    }
+
+    // Update the static index
+    void update_static_index_impl() {
+        int N = this->n_particles();
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(N);
+        CUDA_LAUNCH(md::geo::update_static_index_kernel, G, B, N, this->order_inv.ptr(), this->static_index.ptr());
     }
 
     // Load static data from hdf5 group and initialize the particle
@@ -242,56 +252,68 @@ public:
     void output_build_registry_impl(io::OutputRegistry& reg) {
         // Register point-specific fields
         using io::FieldSpec1D; using io::FieldSpec2D;
-        std::string order_inv_str = "order_inv";
+        std::string order_str = "static_index";
         // Expose canonical->current permutation so OutputManager can restore the original ordering
         {
             FieldSpec1D<int> p;
-            p.get_device_field = [this]{ return &this->order_inv; };
-            reg.fields[order_inv_str] = p;
+            p.get_device_field = [this]{ return &this->static_index; };
+            reg.fields[order_str] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_x; };
+            p.index_by = [order_str]{ return order_str; };
+            reg.fields["stress_tensor_x"] = p;
         }
         {
             FieldSpec2D<double> p; 
             p.preprocess = [this]{ this->compute_stress_tensor(); };
             p.get_device_field = [this]{ return &this->stress_tensor_y; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["stress_tensor_y"] = p;
         }
         {
             FieldSpec2D<double> p;
             p.preprocess = [this]{ this->compute_stress_tensor_total(); };
             p.get_device_field = [this]{ return &this->stress_tensor_total_x; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
             reg.fields["stress_tensor_total_x"] = p;
+        }
+        {
+            FieldSpec2D<double> p;
+            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_total_y; };
+            reg.fields["stress_tensor_total_y"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->pe; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["pe"] = p;
         }
         {
             FieldSpec1D<double> p; 
             p.preprocess = [this]{ this->compute_ke(); };
             p.get_device_field = [this]{ return &this->ke; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["ke"] = p;
         }
         {
             io::FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->pos; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["pos"] = p;
         }
         {
             io::FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->vel; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["vel"] = p;
         }
         {
             io::FieldSpec2D<double> p; 
             p.get_device_field = [this]{ return &this->force; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["force"] = p;
         }
         {
@@ -302,13 +324,13 @@ public:
         {
             io::FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->mass; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["mass"] = p;
         }
         {
             io::FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->rad; };
-            p.index_by = [order_inv_str]{ return order_inv_str; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["rad"] = p;
         }
         if constexpr (has_output_build_registry_point_extras_impl<Derived>::value)

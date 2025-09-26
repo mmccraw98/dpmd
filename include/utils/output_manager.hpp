@@ -255,6 +255,7 @@ public:
                         write_scalar<int>(g, "n_vertices",  particles_.n_vertices());
                         // Snapshot and write static fields
                         SaveTask t; t.kind = TaskKind::FinalInit; capture_registry_to_host(reg, static_names, t);
+                        apply_reindex(t);
                         write_host_maps_to_group(g, t);
                         H5Gclose(g);
                     }
@@ -267,6 +268,7 @@ public:
                     if (g >= 0) {
                         // Snapshot and write non-static state fields (+extras already merged)
                         SaveTask t; t.kind = TaskKind::FinalInit; capture_registry_to_host(reg, state_names, t);
+                        apply_reindex(t);
                         write_host_maps_to_group(g, t);
                         H5Gclose(g);
                     }
