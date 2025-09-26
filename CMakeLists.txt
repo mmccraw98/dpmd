@@ -124,6 +124,7 @@ set(TEST_SOURCES
     tests/nve_rigid_bumpy_pbc_final.cu
     tests/nve_disk_pbc_final.cu
     tests/damped_dynamics_compress_to_packing_fraction.cu
+    tests/nvt_rescale_disk_pbc_compress.cu
 )
 
 # Create test executables

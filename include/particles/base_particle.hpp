@@ -430,7 +430,8 @@ public:
     }
 
     // Set the temperature of the systems by scaling the velocities
-    void set_temperature(df::DeviceField1D<double> temperature_target) {
+    void set_temperature(df::DeviceField1D<double> temperature_target, bool remove_average_velocity=true) {
+        compute_ke_total();
         compute_temperature();  // get current temperature
         df::DeviceField1D<double> scale; scale.resize(n_systems());
         auto B = md::launch::threads_for();
@@ -438,14 +439,16 @@ public:
         CUDA_LAUNCH(md::geo::compute_temperature_scale_factor_kernel, G, B,
             temperature.ptr(), temperature_target.ptr(), scale.ptr()
         );
-        set_average_velocity();
+        if (remove_average_velocity) {
+            set_average_velocity();
+        }
         scale_velocities(scale);
     }
 
     // Overload for a single temperature target
-    void set_temperature(double temperature_target) {
+    void set_temperature(double temperature_target, bool remove_average_velocity=true) {
         df::DeviceField1D<double> temperature_target_df; temperature_target_df.resize(n_systems()); temperature_target_df.fill(temperature_target);
-        set_temperature(temperature_target_df);
+        set_temperature(temperature_target_df, remove_average_velocity);
     }
 
     // Scale the velocities of the particles

@@ -1,10 +1,13 @@
 // TODO: make particle-agnostic loading method and scripts
+// TODO: add heirarchical pre-req calculations
+// TODO: add console log
+// TODO: debate adding energy log
+// TODO: contact counting is broken!
 // TODO: fix bugs with memory access, probably due to improperly formatted input data
 // TODO: add output manager configs and run argument configs - probably the same thing
 // TODO: make stress tensor (for poly particles) a vertex-level operation 
 // TODO: make pairwise interactions (for poly particles) a vertex-level operation - sum to particle level using vertex particle id comparison
 // TODO: when using single vertex rigid bumpy particles, the cell list 2nd rebuild has a memory access error
-// TODO: validate ordering for disks!
 // TODO: WHEN USING PAIR_IDS WITH CELL LIST FOR POINT PARTICLES, PAIR_IDS ARE NOT THE STATIC PARTICLE IDS!
 // TODO: base particle can only have system-level output registry (non ordered) data
 // TODO: point particle and poly particle should implement particle/vertex -level output registry (ordered) data
@@ -20,12 +23,28 @@
 // TODO: validate rigid bumpy particle with core
 
 
+
+
+
+
+
+
+
+
 // TODO: simplify the output manager
 // TODO: add support for different logging schemes (linear, logarithmic)
 // TODO: add energy file
 // TODO: output manager configs
 
-// TODO: probably should NOT be writing anything in init that doesnt exist already, whether in append mode or not
+
+
+
+
+- Future Feature Idea – Trajectory Chunk Cache Budget
+- Control: Expose a trajectory_chunk_cache_limit setting. During initialization compute the number of trajectory datasets (including the shared /timestep one). Derive a per-dataset budget limit / num_dsets and pass it to H5Pset_chunk_cache for every dataset access property list while creating/opening trajectory datasets.
+- Motivation: Runs with millions of particles produce very wide chunks that overflow the 1 MB default cache, forcing HDF5 to flush chunks every timestep. A tunable budget keeps chunk writes in-memory longer, improving throughput, while still bounding peak RSS during large jobs.
+- Behavior: HDF5 allocates chunk cache pages on demand up to the per-dataset limit. The global cap therefore remains “soft”: actual memory equals active_datasets × allocated_chunks. Document that users should scale the limit based on expected concurrency, and consider reducing budgets or closing datasets if many stay open concurrently.
+
 
 // TODO: add a way to manually save an array to trajectory under the current step with optional array indices to save:
 

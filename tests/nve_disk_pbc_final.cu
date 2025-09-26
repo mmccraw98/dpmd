@@ -4,6 +4,7 @@
 #include "utils/cuda_utils.cuh"
 #include "routines/minimizers.cuh"
 #include "integrators/velocity_verlet.cuh"
+#include "integrators/damped_velocity_verlet.cuh"
 #include "utils/output_manager.hpp"
 
 int main(int argc, char** argv) {
@@ -25,10 +26,9 @@ int main(int argc, char** argv) {
     vv.init();
 
     io::OutputManager<md::disk::Disk> om(P, out_path, 10, false);
-    om.set_extra_init_fields({});
-    om.set_extra_final_fields({});
-    om.set_trajectory_fields({"pos", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
-    // "n_contacts_total" - BROKEN!
+    om.set_extra_init_fields({"pos", "vel"});
+    om.set_extra_final_fields({"pos", "vel"});
+    om.set_trajectory_fields({"pos", "vel", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
     om.set_trajectory_interval(save_increment);
     om.initialize();
 

@@ -1010,10 +1010,10 @@ __global__ void compute_stress_tensor_kernel(
             double force_y = -fmag * ny;
 
             // divide by 2 to avoid double counting
-            stress_tensor_x_x_acc += dx * force_x / 2.0;
-            stress_tensor_x_y_acc += dx * force_y / 2.0;
-            stress_tensor_y_x_acc += dy * force_x / 2.0;
-            stress_tensor_y_y_acc += dy * force_y / 2.0;
+            stress_tensor_x_x_acc += -dx * force_x / 2.0;
+            stress_tensor_x_y_acc += -dx * force_y / 2.0;
+            stress_tensor_y_x_acc += -dy * force_x / 2.0;
+            stress_tensor_y_y_acc += -dy * force_y / 2.0;
         }
     }
     stress_tensor_xx[i] = stress_tensor_x_x_acc / box_area;
@@ -1172,9 +1172,8 @@ void RigidBumpy::scale_velocities_impl(df::DeviceField1D<double> scale) {
 }
 
 df::DeviceField2D<double> RigidBumpy::calculate_average_velocity_impl() {
-    const int N = n_particles();
     auto B = md::launch::threads_for();
-    auto G = md::launch::blocks_for(N);
+    auto G = md::launch::blocks_for(n_systems());
     df::DeviceField2D<double> average_velocity; average_velocity.resize(n_systems());
     CUDA_LAUNCH(kernels::calculate_average_velocity_kernel, G, B,
         this->vel.xptr(), this->vel.yptr(),
@@ -1185,9 +1184,8 @@ df::DeviceField2D<double> RigidBumpy::calculate_average_velocity_impl() {
 
 void RigidBumpy::set_average_velocity_impl(df::DeviceField2D<double> average_velocity) {
     df::DeviceField2D<double> current_average_velocity = this->calculate_average_velocity();
-    const int N = n_particles();
     auto B = md::launch::threads_for();
-    auto G = md::launch::blocks_for(N);
+    auto G = md::launch::blocks_for(n_systems());
     CUDA_LAUNCH(kernels::set_average_velocity_kernel, G, B,
         this->vel.xptr(), this->vel.yptr(),
         average_velocity.xptr(), average_velocity.yptr(),
