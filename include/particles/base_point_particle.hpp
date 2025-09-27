@@ -269,6 +269,13 @@ public:
             reg.fields[order_str] = p;
         }
         {
+            FieldSpec1D<int> p; 
+            p.preprocess = [this]{ this->compute_contacts(); };
+            p.get_device_field = [this]{ return &this->contacts; };
+            p.index_by = [order_str]{ return order_str; };
+            reg.fields["contacts"] = p;
+        }
+        {
             FieldSpec2D<double> p; 
             p.preprocess = [this]{ this->compute_stress_tensor(); };
             p.get_device_field = [this]{ return &this->stress_tensor_x; };

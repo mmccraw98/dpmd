@@ -437,6 +437,12 @@ public:
             reg.fields[order_str] = p;
         }
         {
+            FieldSpec1D<int> p; 
+            p.preprocess = [this]{ this->compute_contacts(); };
+            p.get_device_field = [this]{ return &this->contacts; };
+            reg.fields["contacts"] = p;
+        }
+        {
             FieldSpec1D<double> p; 
             p.get_device_field = [this]{ return &this->pe; };
             reg.fields["pe"] = p;

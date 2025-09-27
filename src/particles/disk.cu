@@ -472,11 +472,13 @@ __global__ void compute_pair_dist_kernel(
     const double* __restrict__ y,
     int* __restrict__ pair_ids_i, 
     int* __restrict__ pair_ids_j,
+    const int* __restrict__ static_index,
     double* __restrict__ pair_dist
 ) {
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
+    const int i_static = static_index[i];
 
     const int sid = md::geo::g_sys.id[i];
     const double box_size_x = md::geo::g_box.size_x[sid];
@@ -497,8 +499,8 @@ __global__ void compute_pair_dist_kernel(
         double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
 
         pair_dist[k] = sqrt(r2);
-        pair_ids_i[k] = i;
-        pair_ids_j[k] = j;
+        pair_ids_i[k] = i_static;
+        pair_ids_j[k] = static_index[j];
     }
 }
 
@@ -769,6 +771,10 @@ void Disk::compute_contacts_impl() {
 }
 
 void Disk::compute_pair_dist_impl() {
+    if (this->static_index.size() != n_particles()) {  // requirement for compatibility with cell-list
+        this->static_index.resize(n_particles());
+        thrust::sequence(this->static_index.begin(), this->static_index.end(), 0);
+    }
     const int N = n_particles();
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);
@@ -782,6 +788,7 @@ void Disk::compute_pair_dist_impl() {
     CUDA_LAUNCH(kernels::compute_pair_dist_kernel, G, B,
         this->pos.xptr(), this->pos.yptr(),
         this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->static_index.ptr(),
         this->pair_dist.ptr()
     );
 }

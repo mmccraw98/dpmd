@@ -28,7 +28,8 @@ int main(int argc, char** argv) {
     io::OutputManager<md::disk::Disk> om(P, out_path, 10, false);
     om.set_extra_init_fields({"pos", "vel"});
     om.set_extra_final_fields({"pos", "vel"});
-    om.set_trajectory_fields({"pos", "vel", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
+    // om.set_trajectory_fields({"pos", "vel", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
+    om.set_trajectory_fields({"contacts", "n_contacts_total"});
     om.set_trajectory_interval(save_increment);
     om.initialize();
 

@@ -632,6 +632,9 @@ public:
 
     // Compute the total number of contacts for each system
     void compute_n_contacts_total() {
+        if (this->n_contacts_total.size() != this->n_systems()) {
+            this->n_contacts_total.resize(this->n_systems());
+        }
         cudaStream_t stream = 0;
         segmented_sum(this->contacts.ptr(), this->n_contacts_total.ptr(), stream);
     }
@@ -855,12 +858,6 @@ public:
             p.preprocess = [this]{ this->compute_ke_total(); this->compute_temperature(); };
             p.get_device_field = [this]{ return &this->temperature; };
             reg.fields["temperature"] = p;
-        }
-        {
-            FieldSpec1D<int> p; 
-            p.preprocess = [this]{ this->compute_contacts(); };
-            p.get_device_field = [this]{ return &this->contacts; };
-            reg.fields["contacts"] = p;
         }
         {
             FieldSpec1D<int> p; 

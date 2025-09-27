@@ -1,7 +1,4 @@
-// TODO: WHEN USING PAIR_IDS WITH CELL LIST FOR POINT PARTICLES, PAIR_IDS ARE NOT THE STATIC PARTICLE IDS!
-// TODO: contact counting is broken!
-// TODO: check speeds of stress tensor calculation for RB, i think it could be a lot faster
-// TODO: make stress tensor (for poly particles) a vertex-level operation 
+// TODO: handling ragged array saving does not work properly.  once an array is deteced as ragged, its data up to that point is erased.  from then on, it is saved under a ragged group in the dataset
 // TODO: define units
 // TODO: define proper energy scale for rigid bumpy particles
 // TODO: if rigid bumpy particle with core requires multiple energy scales, implement them
