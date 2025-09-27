@@ -787,6 +787,12 @@ void Disk::compute_pair_dist_impl() {
 }
 
 void Disk::compute_stress_tensor_impl() {
+    if (this->stress_tensor_x.size() != this->n_particles()) {
+        this->stress_tensor_x.resize(this->n_particles());
+    }
+    if (this->stress_tensor_y.size() != this->n_particles()) {
+        this->stress_tensor_y.resize(this->n_particles());
+    }
     const int N = n_particles();
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);

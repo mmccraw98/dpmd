@@ -123,6 +123,17 @@ __global__ void compute_temperature_kernel(
     temperature[s] = ke_total[s] * 2.0 / (n_dof[s]);
 }
 
+__global__ void compute_pressure_kernel(
+    const double* __restrict__ stress_tensor_total_x_x,
+    const double* __restrict__ stress_tensor_total_y_y,
+    double* __restrict__ pressure
+) {
+    int s = blockIdx.x * blockDim.x + threadIdx.x;
+    const int S = g_sys.n_systems;
+    if (s >= S) return;
+    pressure[s] = 0.5 * (stress_tensor_total_x_x[s] + stress_tensor_total_y_y[s]);
+}
+
 __global__ void compute_temperature_scale_factor_kernel(
     const double* __restrict__ temperature,
     const double* __restrict__ temperature_target,

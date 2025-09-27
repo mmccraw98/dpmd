@@ -1,26 +1,27 @@
-// TODO: make particle-agnostic loading method and scripts
-// TODO: add heirarchical pre-req calculations
-// TODO: add console log
-// TODO: debate adding energy log
+// TODO: WHEN USING PAIR_IDS WITH CELL LIST FOR POINT PARTICLES, PAIR_IDS ARE NOT THE STATIC PARTICLE IDS!
 // TODO: contact counting is broken!
+// TODO: check speeds of stress tensor calculation for RB, i think it could be a lot faster
+// TODO: make stress tensor (for poly particles) a vertex-level operation 
+// TODO: define units
+// TODO: define proper energy scale for rigid bumpy particles
+// TODO: if rigid bumpy particle with core requires multiple energy scales, implement them
+// TODO: add mixed-energy interaction case (compile option?) (is this something that can be handled by just scaling by the diameter?)
+// TODO: implement hessian
+// TODO: add heirarchical pre-req calculations!!!!!!
+// TODO: make particle-agnostic loading method and scripts
+// TODO: add console log
+// TODO: add disk state reversion
+// TODO: debate adding energy log
 // TODO: fix bugs with memory access, probably due to improperly formatted input data
 // TODO: add output manager configs and run argument configs - probably the same thing
-// TODO: make stress tensor (for poly particles) a vertex-level operation 
 // TODO: make pairwise interactions (for poly particles) a vertex-level operation - sum to particle level using vertex particle id comparison
 // TODO: when using single vertex rigid bumpy particles, the cell list 2nd rebuild has a memory access error
-// TODO: WHEN USING PAIR_IDS WITH CELL LIST FOR POINT PARTICLES, PAIR_IDS ARE NOT THE STATIC PARTICLE IDS!
 // TODO: base particle can only have system-level output registry (non ordered) data
 // TODO: point particle and poly particle should implement particle/vertex -level output registry (ordered) data
 // TODO: rename cell aux -> cell write, add to base particle
 
 // TODO: implement system averaging (like system segmented sum but then divided by system size)
 
-// TODO: implement hessian
-// TODO: define units
-// TODO: define proper energy scale for rigid bumpy particles
-// TODO: if rigid bumpy particle with core requires multiple energy scales, implement them
-// TODO: add mixed-energy interaction case (compile option?) (is this something that can be handled by just scaling by the diameter?)
-// TODO: validate rigid bumpy particle with core
 
 
 

@@ -640,15 +640,7 @@ public:
     void compute_pair_dist() { derived().compute_pair_dist_impl(); }
 
     // Compute the stress tensor for each system
-    void compute_stress_tensor() {
-        if (this->stress_tensor_x.size() != this->n_particles()) {
-            this->stress_tensor_x.resize(this->n_particles());
-        }
-        if (this->stress_tensor_y.size() != this->n_particles()) {
-            this->stress_tensor_y.resize(this->n_particles());
-        }
-        derived().compute_stress_tensor_impl();
-    }
+    void compute_stress_tensor() { derived().compute_stress_tensor_impl(); }
 
     // Compute the total stress tensor for each system
     void compute_stress_tensor_total() {
@@ -658,31 +650,24 @@ public:
         if (this->stress_tensor_total_y.size() != this->n_systems()) {
             this->stress_tensor_total_y.resize(this->n_systems());
         }
-        this->segmented_sum(this->stress_tensor_x.xptr(), this->stress_tensor_total_x.xptr(), 0);
-        this->segmented_sum(this->stress_tensor_y.yptr(), this->stress_tensor_total_y.yptr(), 0);
-        this->segmented_sum(this->stress_tensor_x.yptr(), this->stress_tensor_total_y.xptr(), 0);
-        this->segmented_sum(this->stress_tensor_y.xptr(), this->stress_tensor_total_x.yptr(), 0);
+        derived().compute_stress_tensor_total_impl();
     }
 
     // Compute the pressure for each system (trace of the stress tensor divided by the number of dimensions, 2)
     void compute_pressure() {
+        // As a note, this is not an efficient implementation!!!!
+        // If you need pressure every step, you should add the virial calculation
+        // to the pairwise force calculation step.
+        // Furthermore, the compute_stress_tensor_total sums over the off-diagonal components of the stress tensor.
+        // For pressure, you only need the diagonal components.
         compute_stress_tensor();
-
-        cudaStream_t stream = 0;
+        compute_stress_tensor_total();
         const int S = this->n_systems();
-        if (this->pressure.size() != S) {
-            this->pressure.resize(S);
-        }
-
-        auto input_iter = thrust::make_transform_iterator(
-            thrust::make_zip_iterator(thrust::make_tuple(
-                this->stress_tensor_x.xptr(),  // sigma_xx
-                this->stress_tensor_y.yptr()   // sigma_yy
-            )),
-            md::geo::StressTrace2D()
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(S);
+        CUDA_LAUNCH(md::geo::compute_pressure_kernel, G, B,
+            this->stress_tensor_total_x.xptr(), this->stress_tensor_total_y.yptr(), this->pressure.ptr()
         );
-
-        this->segmented_sum(input_iter, this->pressure.ptr(), stream);
     }
 
     // Compute the total power of each system (used for the FIRE algorithm)
@@ -1016,6 +1001,8 @@ protected:
     void reorder_particles_impl() {}
     void reset_displacements_impl() {}
     void compute_ke_impl() {}
+    void compute_stress_tensor_impl() {}
+    void compute_stress_tensor_total_impl() {}
     void allocate_vertices_impl(int) {}
     void bind_system_globals_impl() {}
     int n_vertices_impl() const { return 0; }

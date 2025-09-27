@@ -103,13 +103,11 @@ __global__ void compute_temperature_kernel(
     double*       __restrict__ temperature
 );
 
-// Structs
-struct StressTrace2D {
-	__host__ __device__
-	double operator()(const thrust::tuple<double, double>& t) const {
-		return 0.5 * (thrust::get<0>(t) + thrust::get<1>(t));
-	}
-};
+__global__ void compute_pressure_kernel(
+    const double* __restrict__ stress_tensor_total_x_x,
+    const double* __restrict__ stress_tensor_total_y_y,
+    double* __restrict__ pressure
+);
 
 // -----------------------------
 // Geometry helpers (ASAP / __forceinline__)

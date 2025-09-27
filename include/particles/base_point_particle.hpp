@@ -208,6 +208,15 @@ public:
         CUDA_LAUNCH(md::geo::update_static_index_kernel, G, B, N, this->order_inv.ptr(), this->static_index.ptr());
     }
 
+    // Compute the stress tensor for each system
+    void compute_stress_tensor_total_impl() {
+        this->compute_stress_tensor();
+        this->segmented_sum(this->stress_tensor_x.xptr(), this->stress_tensor_total_x.xptr(), 0);
+        this->segmented_sum(this->stress_tensor_y.yptr(), this->stress_tensor_total_y.yptr(), 0);
+        this->segmented_sum(this->stress_tensor_x.yptr(), this->stress_tensor_total_y.xptr(), 0);
+        this->segmented_sum(this->stress_tensor_y.xptr(), this->stress_tensor_total_x.yptr(), 0);
+    }
+
     // Load static data from hdf5 group and initialize the particle
     void load_static_from_hdf5_group_impl(hid_t group) {
         this->e_interaction.from_host(read_vector<double>(group, "e_interaction"));

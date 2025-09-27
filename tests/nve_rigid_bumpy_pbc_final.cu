@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 10, false);
     om.set_extra_init_fields({});
     om.set_extra_final_fields({});
-    om.set_trajectory_fields({"pos", "angle", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y", "vertex_pos"});
+    om.set_trajectory_fields({"pos", "angle", "pe_total", "ke_total", "temperature", "stress_tensor_total_x", "stress_tensor_total_y", "pressure"});
     // "n_contacts_total" - BROKEN!
     om.set_trajectory_interval(save_increment);
     om.initialize();

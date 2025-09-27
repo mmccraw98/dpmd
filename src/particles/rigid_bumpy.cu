@@ -940,81 +940,69 @@ __global__ void compute_stress_tensor_kernel(
     double* __restrict__ stress_tensor_yx,
     double* __restrict__ stress_tensor_yy
 ) {
-    const int N = md::geo::g_sys.n_particles;
+    const int Nv = md::geo::g_sys.n_vertices;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= N) return;
-    const int sid = md::geo::g_sys.id[i];
+    if (i >= Nv) return;
+    const int sid = md::poly::g_vertex_sys.id[i];
     const double box_size_x = md::geo::g_box.size_x[sid];
     const double box_size_y = md::geo::g_box.size_y[sid];
     const double box_inv_x = md::geo::g_box.inv_x[sid];
     const double box_inv_y = md::geo::g_box.inv_y[sid];
     const double e_i = g_rigid_bumpy.e_interaction[sid];
-    const double xi = pos_x[i], yi = pos_y[i];
-    const double vel_xi = vel_x[i], vel_yi = vel_y[i];
-    const double angular_veli = angular_vel[i];
-
-    double stress_tensor_x_x_acc = 0.0;
-    double stress_tensor_x_y_acc = 0.0;
-    double stress_tensor_y_x_acc = 0.0;
-    double stress_tensor_y_y_acc = 0.0;
+    const double v_xi = vertex_pos_x[i], v_yi = vertex_pos_y[i];
+    const int pid = md::poly::g_poly.particle_id[i];
+    const double xi = pos_x[pid], yi = pos_y[pid];
+    const double vel_xi = vel_x[pid], vel_yi = vel_y[pid];
+    const double angular_veli = angular_vel[pid];
 
     double box_area = box_size_x * box_size_y;
 
-    int beg = md::poly::g_poly.particle_offset[i];
-    int n_vertices_per_particle = md::poly::g_poly.n_vertices_per_particle[i];
-    int end = beg + n_vertices_per_particle;
-    int condition = (n_vertices_per_particle > 1) ? 1.0 : 0.0;
+    const double ri = g_rigid_bumpy.vertex_rad[i];
+    const double mass = vertex_mass[i];
+    const double rel_pos_x = v_xi - xi;
+    const double rel_pos_y = v_yi - yi;
+    const double p_rad = sqrt(rel_pos_x * rel_pos_x + rel_pos_y * rel_pos_y);
+    double vertex_vel_x = vel_xi - angular_veli * rel_pos_y;
+    double vertex_vel_y = vel_yi + angular_veli * rel_pos_x;
 
-    for (int v = beg; v < end; v++) {
-        const int v_index = md::poly::g_poly.static_index[v];  // get the real vertex index
-        const double vxi = vertex_pos_x[v_index], vyi = vertex_pos_y[v_index];
-        const double ri = g_rigid_bumpy.vertex_rad[v_index];
-        const double mass = vertex_mass[v_index];
-        const double rel_pos_x = vxi - xi;
-        const double rel_pos_y = vyi - yi;
-        const double p_rad = sqrt(rel_pos_x * rel_pos_x + rel_pos_y * rel_pos_y);
-        double vertex_vel_x = vel_xi - angular_veli * rel_pos_y * (condition);
-        double vertex_vel_y = vel_yi + angular_veli * rel_pos_x * (condition);
+    double stress_tensor_x_x_acc = mass * vertex_vel_x * vertex_vel_x;
+    double stress_tensor_x_y_acc = mass * vertex_vel_x * vertex_vel_y;
+    double stress_tensor_y_x_acc = mass * vertex_vel_y * vertex_vel_x;
+    double stress_tensor_y_y_acc = mass * vertex_vel_y * vertex_vel_y;
 
-        stress_tensor_x_x_acc += mass * vertex_vel_x * vertex_vel_x;
-        stress_tensor_x_y_acc += mass * vertex_vel_x * vertex_vel_y;
-        stress_tensor_y_x_acc += mass * vertex_vel_y * vertex_vel_x;
-        stress_tensor_y_y_acc += mass * vertex_vel_y * vertex_vel_y;
+    const int v_beg = md::geo::g_neigh.start[i];
+    const int v_end = md::geo::g_neigh.start[i + 1];
+    for (int k = v_beg; k < v_end; k++) {
+        const int v_j = md::geo::g_neigh.ids[k];
+        const double v_xj = vertex_pos_x[v_j], v_yj = vertex_pos_y[v_j];
+        const double rj = g_rigid_bumpy.vertex_rad[v_j];
 
-        const int v_beg = md::geo::g_neigh.start[v_index];
-        const int v_end = md::geo::g_neigh.start[v_index + 1];
-        for (int k = v_beg; k < v_end; k++) {
-            const int v_j = md::geo::g_neigh.ids[k];
-            const double vxj = vertex_pos_x[v_j], vyj = vertex_pos_y[v_j];
-            const double rj = g_rigid_bumpy.vertex_rad[v_j];
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(v_xi, v_yi, v_xj, v_yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
 
-            double dx, dy;
-            double r2 = md::geo::disp_pbc_L(vxi, vyi, vxj, vyj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
-    
-            // Early reject if no overlap: r^2 >= (ri+rj)^2
-            const double radsum = ri + rj;
-            const double radsum2 = radsum * radsum;
-            if (r2 >= radsum2) continue;
-    
-            // Overlap: compute r and invr once
-            const double r   = sqrt(r2);
-            const double inv = 1.0 / r;
-            const double nx  = dx * inv;
-            const double ny  = dy * inv;
-    
-            const double delta = radsum - r;
-            const double fmag  = e_i * delta;
-    
-            // Force on i is along -n (repulsion)
-            double force_x = -fmag * nx;
-            double force_y = -fmag * ny;
+        // Early reject if no overlap: r^2 >= (ri+rj)^2
+        const double radsum = ri + rj;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
 
-            // divide by 2 to avoid double counting
-            stress_tensor_x_x_acc += -dx * force_x / 2.0;
-            stress_tensor_x_y_acc += -dx * force_y / 2.0;
-            stress_tensor_y_x_acc += -dy * force_x / 2.0;
-            stress_tensor_y_y_acc += -dy * force_y / 2.0;
-        }
+        // Overlap: compute r and invr once
+        const double r   = sqrt(r2);
+        const double inv = 1.0 / r;
+        const double nx  = dx * inv;
+        const double ny  = dy * inv;
+
+        const double delta = radsum - r;
+        const double fmag  = e_i * delta;
+
+        // Force on i is along -n (repulsion)
+        double force_x = -fmag * nx;
+        double force_y = -fmag * ny;
+
+        // divide by 2 to avoid double counting
+        stress_tensor_x_x_acc += -dx * force_x / 2.0;
+        stress_tensor_x_y_acc += -dx * force_y / 2.0;
+        stress_tensor_y_x_acc += -dy * force_x / 2.0;
+        stress_tensor_y_y_acc += -dy * force_y / 2.0;
     }
     stress_tensor_xx[i] = stress_tensor_x_x_acc / box_area;
     stress_tensor_xy[i] = stress_tensor_x_y_acc / box_area;
@@ -1413,9 +1401,15 @@ void RigidBumpy::compute_pair_dist_impl() {
 }
 
 void RigidBumpy::compute_stress_tensor_impl() {
-    const int N = n_particles();
+    if (this->stress_tensor_x.size() != this->n_vertices()) {
+        this->stress_tensor_x.resize(this->n_vertices());
+    }
+    if (this->stress_tensor_y.size() != this->n_vertices()) {
+        this->stress_tensor_y.resize(this->n_vertices());
+    }
+    const int Nv = n_vertices();
     auto B = md::launch::threads_for();
-    auto G = md::launch::blocks_for(N);
+    auto G = md::launch::blocks_for(Nv);
     CUDA_LAUNCH(kernels::compute_stress_tensor_kernel, G, B,
         this->pos.xptr(), this->pos.yptr(),
         this->vertex_pos.xptr(), this->vertex_pos.yptr(),

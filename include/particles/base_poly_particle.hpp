@@ -285,6 +285,16 @@ public:
         return this->vertex_pos.size();
     }
 
+    // Compute the stress tensor for each system
+    void compute_stress_tensor_total_impl() {
+        this->compute_stress_tensor();
+        const int S = this->n_systems();
+        this->segmented_sum(this->stress_tensor_x.xptr(), this->stress_tensor_total_x.xptr(), S, this->vertex_system_offset.ptr(), this->vertex_system_offset.ptr() + 1);
+        this->segmented_sum(this->stress_tensor_y.yptr(), this->stress_tensor_total_y.yptr(), S, this->vertex_system_offset.ptr(), this->vertex_system_offset.ptr() + 1);
+        this->segmented_sum(this->stress_tensor_x.yptr(), this->stress_tensor_total_y.xptr(), S, this->vertex_system_offset.ptr(), this->vertex_system_offset.ptr() + 1);
+        this->segmented_sum(this->stress_tensor_y.xptr(), this->stress_tensor_total_x.yptr(), S, this->vertex_system_offset.ptr(), this->vertex_system_offset.ptr() + 1);
+    }
+
     // Build the particle-level neighbor list from the vertex-level neighbor list
     void build_particle_neighbors() {
         const int N = this->n_particles();
@@ -512,7 +522,15 @@ public:
         {
             FieldSpec2D<double> p; 
             p.preprocess = [this]{ this->compute_stress_tensor(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_x; };
+            p.index_by = [order_str]{ return order_str; };
+            reg.fields["stress_tensor_x"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_stress_tensor(); };
             p.get_device_field = [this]{ return &this->stress_tensor_y; };
+            p.index_by = [order_str]{ return order_str; };
             reg.fields["stress_tensor_y"] = p;
         }
         {
@@ -520,6 +538,12 @@ public:
             p.preprocess = [this]{ this->compute_stress_tensor_total(); };
             p.get_device_field = [this]{ return &this->stress_tensor_total_x; };
             reg.fields["stress_tensor_total_x"] = p;
+        }
+        {
+            FieldSpec2D<double> p;
+            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            p.get_device_field = [this]{ return &this->stress_tensor_total_y; };
+            reg.fields["stress_tensor_total_y"] = p;
         }
         if constexpr (has_output_build_registry_poly_extras_impl<Derived>::value)
             this->derived().output_build_registry_poly_extras_impl(reg);
