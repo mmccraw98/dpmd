@@ -1,8 +1,5 @@
 // TODO: handling ragged array saving does not work properly.  once an array is deteced as ragged, its data up to that point is erased.  from then on, it is saved under a ragged group in the dataset
-// TODO: define units
-// TODO: define proper energy scale for rigid bumpy particles
-// TODO: if rigid bumpy particle with core requires multiple energy scales, implement them
-// TODO: add mixed-energy interaction case (compile option?) (is this something that can be handled by just scaling by the diameter?)
+// TODO: add compile flag for using stiffness or energy interactions - add a function to handle?
 // TODO: implement hessian
 // TODO: add heirarchical pre-req calculations!!!!!!
 // TODO: make particle-agnostic loading method and scripts
