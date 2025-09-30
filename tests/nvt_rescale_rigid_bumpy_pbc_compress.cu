@@ -12,8 +12,8 @@
 // The second half of the run is meant to equilibrate the system at the desired temperature
 
 int main(int argc, char** argv) {
-    if (argc != 6) {
-        std::cerr << "Usage: " << argv[0] << " <in_path> <out_path> <n_steps> <phi_increment> <temperature_target>" << std::endl;
+    if (argc != 7) {
+        std::cerr << "Usage: " << argv[0] << " <in_path> <out_path> <n_steps> <phi_increment> <temperature_target> <dt_scale>" << std::endl;
         return 1;
     }
     std::string in_path = argv[1];
@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     const int n_steps = std::stoi(argv[3]);
     const double phi_increment = std::stod(argv[4]);  // total amount we will be (de)compressing the system
     const double temperature_target = std::stod(argv[5]);  // target temperature for the system
-    const double dt_scale = 1e-2;
+    const double dt_scale = std::stod(argv[6]);
 
     const int compression_frequency = std::min(n_steps, 100);  // how often we will be (de)compressing the system
     const double phi_step = phi_increment / (n_steps / compression_frequency);  // increment we will be (de)compressing the system by
@@ -37,8 +37,6 @@ int main(int argc, char** argv) {
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 10, false);
     om.set_extra_init_fields({"packing_fraction", "box_size", "pos", "vel", "angle"});
     om.set_extra_final_fields({"packing_fraction", "box_size", "pos", "vel", "angle"});
-    om.set_trajectory_fields({"pos", "vel", "angle", "pe_total", "ke_total", "box_size", "temperature"});
-    om.set_trajectory_interval(1e2);
     om.initialize();
 
     std::cout << "Running for " << n_steps << " steps" << std::endl;

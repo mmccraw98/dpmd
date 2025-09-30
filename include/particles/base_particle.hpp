@@ -664,8 +664,8 @@ public:
         // to the pairwise force calculation step.
         // Furthermore, the compute_stress_tensor_total sums over the off-diagonal components of the stress tensor.
         // For pressure, you only need the diagonal components.
-        compute_stress_tensor();
-        compute_stress_tensor_total();
+        // compute_stress_tensor();  // commenting these out for run-efficiency on the server
+        // compute_stress_tensor_total();
         const int S = this->n_systems();
         auto B = md::launch::threads_for();
         auto G = md::launch::blocks_for(S);
@@ -907,7 +907,7 @@ public:
         }
         {
             FieldSpec1D<double> p; 
-            p.preprocess = [this]{ this->compute_stress_tensor(); this->compute_pressure(); };
+            p.preprocess = [this]{ this->compute_pressure(); };
             p.get_device_field = [this]{ return &this->pressure; };
             reg.fields["pressure"] = p;
         }
