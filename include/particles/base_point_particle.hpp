@@ -276,6 +276,13 @@ public:
             reg.fields["contacts"] = p;
         }
         {
+            FieldSpec2D<double> p;
+            p.preprocess = [this]{ this->compute_overlaps(); };
+            p.get_device_field = [this]{ return &this->overlaps; };
+            p.index_by = [order_str]{ return order_str; };
+            reg.fields["overlaps"] = p;
+        }
+        {
             FieldSpec2D<double> p; 
             p.preprocess = [this]{ this->compute_stress_tensor(); };
             p.get_device_field = [this]{ return &this->stress_tensor_x; };

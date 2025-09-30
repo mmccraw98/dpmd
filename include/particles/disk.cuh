@@ -16,7 +16,7 @@ struct DiskConst {
 extern __constant__ DiskConst g_disk;
 
 // Bind the disk constants to the device
-void bind_disk_globals(const double* d_e_interaction, const double* d_mass, const double* d_rad, unsigned int* d_rebuild_flag, const double* d_thresh2);
+void bind_disk_globals(const double* d_e_interaction, const double* d_mass, const double* d_rad, unsigned int* d_rebuild_flag);
 
 // Disk particle class
 class Disk : public md::BasePointParticle<md::disk::Disk> {
@@ -108,6 +108,9 @@ public:
 
     // Compute the distances between each pair of particles
     void compute_pair_dist_impl();
+
+    // Compute the overlaps for each particle
+    void compute_overlaps_impl();
 
     // Compute the stress tensor for each system
     void compute_stress_tensor_impl();

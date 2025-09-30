@@ -926,6 +926,45 @@ __global__ void compute_pair_dist_kernel(
     }
 }
 
+__global__ void compute_overlaps_kernel(
+    const double* __restrict__ x,
+    const double* __restrict__ y,
+    double* __restrict__ overlaps,
+    double* __restrict__ contact_counts
+) {
+    const int Nv = md::geo::g_sys.n_vertices;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= Nv) return;
+    const int sid = md::poly::g_vertex_sys.id[i];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const double xi = x[i], yi = y[i];
+    const double ri = g_rigid_bumpy.vertex_rad[i];
+
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+    
+    double overlap = 0.0;
+    double contact_count = 0.0;
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const double xj = x[j], yj = y[j];
+        const double rj = g_rigid_bumpy.vertex_rad[j];
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+        const double radsum = ri + rj;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+        overlap += radsum - sqrt(r2);
+        contact_count++;
+    }
+    overlaps[i] = overlap;
+    contact_counts[i] = contact_count;
+}
+
 __global__ void compute_stress_tensor_kernel(
     const double* __restrict__ pos_x,
     const double* __restrict__ pos_y,
@@ -1398,6 +1437,19 @@ void RigidBumpy::compute_pair_dist_impl() {
         this->particle_neighbor_start.ptr(), this->particle_neighbor_ids.ptr(),
         this->pair_ids.xptr(), this->pair_ids.yptr(),
         this->pair_dist.ptr());
+}
+
+void RigidBumpy::compute_overlaps_impl() {
+    const int Nv = n_vertices();
+    if (this->overlaps.size() != Nv) {
+        this->overlaps.resize(Nv);
+    }
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(Nv);
+    this->overlaps.fill(0.0, 0.0);
+    CUDA_LAUNCH(kernels::compute_overlaps_kernel, G, B,
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(), this->overlaps.xptr(), this->overlaps.yptr()
+    );
 }
 
 void RigidBumpy::compute_stress_tensor_impl() {

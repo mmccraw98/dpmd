@@ -36,7 +36,8 @@ public:
     df::DeviceField1D<double> area;           // (N,)
 
     // Miscellaneous particle-level fields
-    df::DeviceField1D<int> contacts;  // (N,) - number of particle-particle contacts for each particle
+    df::DeviceField1D<int>    contacts;  // (N,) - number of particle-particle contacts for each particle
+    df::DeviceField2D<double> overlaps;  // (N, 2) - [total overlap, total contact]
 
     // Neighbor list fields
     df::DeviceField1D<int>    neighbor_count; // (N,) - number of neighbors for each particle
@@ -673,6 +674,9 @@ public:
         );
     }
 
+    // Compute the overlaps for each particle
+    void compute_overlaps() { derived().compute_overlaps_impl(); }
+
     // Compute the total power of each system (used for the FIRE algorithm)
     void compute_fpower_total() { derived().compute_fpower_total_impl(); }
 
@@ -1008,6 +1012,7 @@ protected:
     void compute_fpower_total_impl() {}
     void compute_contacts_impl() {}
     void compute_pair_dist_impl() {}
+    void compute_overlaps_impl() {}
     void save_state_impl(df::DeviceField1D<int>, int) {}
     void restore_state_impl(df::DeviceField1D<int>, int) {}
     void load_from_hdf5_group_impl(hid_t) {}
