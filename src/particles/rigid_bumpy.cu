@@ -965,15 +965,11 @@ __global__ void compute_overlaps_kernel(
     contact_counts[i] = contact_count;
 }
 
-__global__ void compute_stress_tensor_kernel(
+__global__ void compute_stress_tensor_virial_kernel(
     const double* __restrict__ pos_x,
     const double* __restrict__ pos_y,
     const double* __restrict__ vertex_pos_x,
     const double* __restrict__ vertex_pos_y,
-    const double* __restrict__ vel_x,
-    const double* __restrict__ vel_y,
-    const double* __restrict__ angular_vel,
-    const double* __restrict__ vertex_mass,
     double* __restrict__ stress_tensor_xx,
     double* __restrict__ stress_tensor_xy,
     double* __restrict__ stress_tensor_yx,
@@ -991,33 +987,28 @@ __global__ void compute_stress_tensor_kernel(
     const double v_xi = vertex_pos_x[i], v_yi = vertex_pos_y[i];
     const int pid = md::poly::g_poly.particle_id[i];
     const double xi = pos_x[pid], yi = pos_y[pid];
-    const double vel_xi = vel_x[pid], vel_yi = vel_y[pid];
-    const double angular_veli = angular_vel[pid];
-
-    double box_area = box_size_x * box_size_y;
-
     const double ri = g_rigid_bumpy.vertex_rad[i];
-    const double mass = vertex_mass[i];
-    const double rel_pos_x = v_xi - xi;
-    const double rel_pos_y = v_yi - yi;
-    const double p_rad = sqrt(rel_pos_x * rel_pos_x + rel_pos_y * rel_pos_y);
-    double vertex_vel_x = vel_xi - angular_veli * rel_pos_y;
-    double vertex_vel_y = vel_yi + angular_veli * rel_pos_x;
 
-    double stress_tensor_x_x_acc = mass * vertex_vel_x * vertex_vel_x;
-    double stress_tensor_x_y_acc = mass * vertex_vel_x * vertex_vel_y;
-    double stress_tensor_y_x_acc = mass * vertex_vel_y * vertex_vel_x;
-    double stress_tensor_y_y_acc = mass * vertex_vel_y * vertex_vel_y;
+    double stress_tensor_x_x_acc = 0.0;
+    double stress_tensor_x_y_acc = 0.0;
+    double stress_tensor_y_x_acc = 0.0;
+    double stress_tensor_y_y_acc = 0.0;
 
     const int v_beg = md::geo::g_neigh.start[i];
     const int v_end = md::geo::g_neigh.start[i + 1];
     for (int k = v_beg; k < v_end; k++) {
         const int v_j = md::geo::g_neigh.ids[k];
         const double v_xj = vertex_pos_x[v_j], v_yj = vertex_pos_y[v_j];
+        const double xj = pos_x[md::poly::g_poly.particle_id[v_j]], yj = pos_y[md::poly::g_poly.particle_id[v_j]];
         const double rj = g_rigid_bumpy.vertex_rad[v_j];
 
+        // compute vertex distances for the vertex-level force
         double dx, dy;
         double r2 = md::geo::disp_pbc_L(v_xi, v_yi, v_xj, v_yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+
+        // compute particle distances for the particle-level virial
+        double dx_p, dy_p;
+        double r2_p = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx_p, dy_p);
 
         // Early reject if no overlap: r^2 >= (ri+rj)^2
         const double radsum = ri + rj;
@@ -1038,15 +1029,43 @@ __global__ void compute_stress_tensor_kernel(
         double force_y = -fmag * ny;
 
         // divide by 2 to avoid double counting
-        stress_tensor_x_x_acc += -dx * force_x / 2.0;
-        stress_tensor_x_y_acc += -dx * force_y / 2.0;
-        stress_tensor_y_x_acc += -dy * force_x / 2.0;
-        stress_tensor_y_y_acc += -dy * force_y / 2.0;
+        stress_tensor_x_x_acc += -dx_p * force_x / 2.0;
+        stress_tensor_x_y_acc += -dx_p * force_y / 2.0;
+        stress_tensor_y_x_acc += -dy_p * force_x / 2.0;
+        stress_tensor_y_y_acc += -dy_p * force_y / 2.0;
     }
-    stress_tensor_xx[i] = stress_tensor_x_x_acc / box_area;
-    stress_tensor_xy[i] = stress_tensor_x_y_acc / box_area;
-    stress_tensor_yx[i] = stress_tensor_y_x_acc / box_area;
-    stress_tensor_yy[i] = stress_tensor_y_y_acc / box_area;
+
+    // atomic add the stress tensor to the particle level
+    atomicAdd(&stress_tensor_xx[pid], stress_tensor_x_x_acc);
+    atomicAdd(&stress_tensor_xy[pid], stress_tensor_x_y_acc);
+    atomicAdd(&stress_tensor_yx[pid], stress_tensor_y_x_acc);
+    atomicAdd(&stress_tensor_yy[pid], stress_tensor_y_y_acc);
+}
+
+__global__ void compute_stress_tensor_kinetic_kernel(
+    const double* __restrict__ vel_x,
+    const double* __restrict__ vel_y,
+    const double* __restrict__ mass,
+    double* __restrict__ stress_tensor_xx,
+    double* __restrict__ stress_tensor_xy,
+    double* __restrict__ stress_tensor_yx,
+    double* __restrict__ stress_tensor_yy
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
+    const double box_area = md::geo::g_box.size_x[sid] * md::geo::g_box.size_y[sid];
+    const double v_mass = mass[i];
+    const double v_vel_x = vel_x[i], v_vel_y = vel_y[i];
+    double s_xx = stress_tensor_xx[i] + v_mass * v_vel_x * v_vel_x;
+    double s_xy = stress_tensor_xy[i] + v_mass * v_vel_x * v_vel_y;
+    double s_yx = stress_tensor_yx[i] + v_mass * v_vel_y * v_vel_x;
+    double s_yy = stress_tensor_yy[i] + v_mass * v_vel_y * v_vel_y;
+    stress_tensor_xx[i] = s_xx / box_area;
+    stress_tensor_xy[i] = s_xy / box_area;
+    stress_tensor_yx[i] = s_yx / box_area;
+    stress_tensor_yy[i] = s_yy / box_area;
 }
 
 __global__ void reset_displacements_kernel(
@@ -1458,20 +1477,26 @@ void RigidBumpy::compute_overlaps_impl() {
 }
 
 void RigidBumpy::compute_stress_tensor_impl() {
-    if (this->stress_tensor_x.size() != this->n_vertices()) {
-        this->stress_tensor_x.resize(this->n_vertices());
+    const int N = n_particles();
+    if (this->stress_tensor_x.size() != N) {
+        this->stress_tensor_x.resize(N);
     }
-    if (this->stress_tensor_y.size() != this->n_vertices()) {
-        this->stress_tensor_y.resize(this->n_vertices());
+    if (this->stress_tensor_y.size() != N) {
+        this->stress_tensor_y.resize(N);
     }
-    const int Nv = n_vertices();
+    this->stress_tensor_x.fill(0.0, 0.0);
+    this->stress_tensor_y.fill(0.0, 0.0);
     auto B = md::launch::threads_for();
-    auto G = md::launch::blocks_for(Nv);
-    CUDA_LAUNCH(kernels::compute_stress_tensor_kernel, G, B,
+    const int Nv = n_vertices();
+    auto G_v = md::launch::blocks_for(Nv);
+    CUDA_LAUNCH(kernels::compute_stress_tensor_virial_kernel, G_v, B,
         this->pos.xptr(), this->pos.yptr(),
         this->vertex_pos.xptr(), this->vertex_pos.yptr(),
-        this->vel.xptr(), this->vel.yptr(), this->angular_vel.ptr(),
-        this->vertex_mass.ptr(),
+        this->stress_tensor_x.xptr(), this->stress_tensor_x.yptr(), this->stress_tensor_y.xptr(), this->stress_tensor_y.yptr());
+
+    auto G_p = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::compute_stress_tensor_kinetic_kernel, G_p, B,
+        this->vel.xptr(), this->vel.yptr(), this->mass.ptr(),
         this->stress_tensor_x.xptr(), this->stress_tensor_x.yptr(), this->stress_tensor_y.xptr(), this->stress_tensor_y.yptr());
 }
 

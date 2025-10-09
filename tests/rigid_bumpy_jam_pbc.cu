@@ -25,16 +25,6 @@ int main(int argc, char** argv) {
     md::rigid_bumpy::RigidBumpy P;
     P.load_from_hdf5(in_path, "init");
 
-
-    std::vector<double> pos_x, pos_y; P.pos.to_host(pos_x, pos_y);
-    double pos_x_sum = 0, pos_y_sum = 0;
-    for (int i = 0; i < pos_x.size(); i++) {
-        pos_x_sum += pos_x[i];
-        pos_y_sum += pos_y[i];
-    }
-    std::cout << "pos_x_sum: " << pos_x_sum << " pos_y_sum: " << pos_y_sum << std::endl;
-
-    
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 1, false);
     om.set_extra_init_fields({"pe_total", "box_size"});
     om.set_extra_final_fields({"pe_total", "box_size", "packing_fraction"});
@@ -42,7 +32,6 @@ int main(int argc, char** argv) {
 
     df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);
 
-    std::cout << "JAMMING" << std::endl;
     md::routines::jam_binary_search_pbc(P, dt, max_compression_steps, max_minimization_steps, avg_pe_target, avg_pe_diff_target, phi_increment, phi_tolerance);
 
     om.finalize();

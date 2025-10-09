@@ -33,7 +33,6 @@ int main(int argc, char** argv) {
 
     df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);
 
-    std::cout << "JAMMING" << std::endl;
     md::routines::jam_binary_search_pbc(P, dt, max_compression_steps, max_minimization_steps, avg_pe_target, avg_pe_diff_target, phi_increment, phi_tolerance);
 
     om.finalize();
