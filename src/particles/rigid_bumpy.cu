@@ -634,9 +634,9 @@ __global__ void mix_velocities_and_forces_kernel(
 __global__ void save_particle_state_kernel(
     const double* __restrict__ pos_x, const double* __restrict__ pos_y, double* __restrict__ last_pos_x, double* __restrict__ last_pos_y,
     const double* __restrict__ angle, double* __restrict__ last_angle,
-    const double* __restrict__ mass, double* __restrict__ last_mass,
-    const double* __restrict__ moment_inertia, double* __restrict__ last_moment_inertia,
-    const int* __restrict__ n_vertices_per_particle, int* __restrict__ last_n_vertices_per_particle,
+    // const double* __restrict__ mass, double* __restrict__ last_mass,
+    // const double* __restrict__ moment_inertia, double* __restrict__ last_moment_inertia,
+    // const int* __restrict__ n_vertices_per_particle, int* __restrict__ last_n_vertices_per_particle,
     const int* __restrict__ flag, const int true_val
 ) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -647,9 +647,9 @@ __global__ void save_particle_state_kernel(
         last_pos_x[i] = pos_x[i];
         last_pos_y[i] = pos_y[i];
         last_angle[i] = angle[i];
-        last_mass[i] = mass[i];
-        last_moment_inertia[i] = moment_inertia[i];
-        last_n_vertices_per_particle[i] = n_vertices_per_particle[i];
+        // last_mass[i] = mass[i];
+        // last_moment_inertia[i] = moment_inertia[i];
+        // last_n_vertices_per_particle[i] = n_vertices_per_particle[i];
     }
 }
 
@@ -689,9 +689,9 @@ __global__ void save_system_state_kernel(
 __global__ void restore_particle_state_kernel(
     double* __restrict__ pos_x, double* __restrict__ pos_y, const double* __restrict__ last_pos_x, const double* __restrict__ last_pos_y,
     double* __restrict__ angle, const double* __restrict__ last_angle,
-    double* __restrict__ mass, const double* __restrict__ last_mass,
-    double* __restrict__ moment_inertia, const double* __restrict__ last_moment_inertia,
-    int* __restrict__ n_vertices_per_particle, const int* __restrict__ last_n_vertices_per_particle,
+    // double* __restrict__ mass, const double* __restrict__ last_mass,
+    // double* __restrict__ moment_inertia, const double* __restrict__ last_moment_inertia,
+    // int* __restrict__ n_vertices_per_particle, const int* __restrict__ last_n_vertices_per_particle,
     const int* __restrict__ flag, const int true_val
 ) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -702,9 +702,9 @@ __global__ void restore_particle_state_kernel(
         pos_x[i] = last_pos_x[i];
         pos_y[i] = last_pos_y[i];
         angle[i] = last_angle[i];
-        mass[i] = last_mass[i];
-        moment_inertia[i] = last_moment_inertia[i];
-        n_vertices_per_particle[i] = last_n_vertices_per_particle[i];
+        // mass[i] = last_mass[i];
+        // moment_inertia[i] = last_moment_inertia[i];
+        // n_vertices_per_particle[i] = last_n_vertices_per_particle[i];
     }
 }
 
@@ -1190,6 +1190,11 @@ void RigidBumpy::update_velocities_impl(df::DeviceField1D<double> scale, double 
         this->force.xptr(), this->force.yptr(), this->torque.ptr(), scale.ptr(), scale2);
 }
 
+void RigidBumpy::zero_velocities_impl() {
+    this->vel.fill(0.0, 0.0);
+    this->angular_vel.fill(0.0);
+}
+
 void RigidBumpy::scale_velocities_impl(df::DeviceField1D<double> scale) {
     const int N = n_particles();
     auto B = md::launch::threads_for();
@@ -1484,12 +1489,6 @@ void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
     if (this->last_state_angle.size() != this->angle.size()) {
         this->last_state_angle.resize(this->angle.size());
     }
-    if (this->last_state_mass.size() != this->mass.size()) {
-        this->last_state_mass.resize(this->mass.size());
-    }
-    if (this->last_state_moment_inertia.size() != this->moment_inertia.size()) {
-        this->last_state_moment_inertia.resize(this->moment_inertia.size());
-    }
     if (this->last_state_vertex_rad.size() != this->vertex_rad.size()) {
         this->last_state_vertex_rad.resize(this->vertex_rad.size());
     }
@@ -1501,9 +1500,6 @@ void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
     }
     if (this->last_state_box_size.size() != this->box_size.size()) {
         this->last_state_box_size.resize(this->box_size.size());
-    }
-    if (this->last_state_n_vertices_per_particle.size() != this->n_vertices_per_particle.size()) {
-        this->last_state_n_vertices_per_particle.resize(this->n_vertices_per_particle.size());
     }
     if (this->last_state_static_index.size() != this->static_index.size()) {
         this->last_state_static_index.resize(this->static_index.size());
@@ -1519,9 +1515,6 @@ void RigidBumpy::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
     CUDA_LAUNCH(kernels::save_particle_state_kernel, G_N, B,
         this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
         this->angle.ptr(), this->last_state_angle.ptr(),
-        this->mass.ptr(), this->last_state_mass.ptr(),
-        this->moment_inertia.ptr(), this->last_state_moment_inertia.ptr(),
-        this->n_vertices_per_particle.ptr(), this->last_state_n_vertices_per_particle.ptr(),
         flag.ptr(), true_val);
     CUDA_LAUNCH(kernels::save_vertex_state_kernel, G_V, B,
         this->vertex_rad.ptr(), this->last_state_vertex_rad.ptr(),
@@ -1543,12 +1536,6 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     if (this->last_state_angle.size() != this->angle.size()) {
         throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_angle is not initialized");
     }
-    if (this->last_state_mass.size() != this->mass.size()) {
-        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_mass is not initialized");
-    }
-    if (this->last_state_moment_inertia.size() != this->moment_inertia.size()) {
-        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_moment_inertia is not initialized");
-    }
     if (this->last_state_vertex_rad.size() != this->vertex_rad.size()) {
         throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_vertex_rad is not initialized");
     }
@@ -1560,9 +1547,6 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     }
     if (this->last_state_box_size.size() != this->box_size.size()) {
         throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_box_size is not initialized");
-    }
-    if (this->last_state_n_vertices_per_particle.size() != this->n_vertices_per_particle.size()) {
-        throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_n_vertices_per_particle is not initialized");
     }
     if (this->last_state_static_index.size() != this->static_index.size()) {
         throw std::runtime_error("RigidBumpy::restore_state_impl: last_state_static_index is not initialized");
@@ -1578,9 +1562,6 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     CUDA_LAUNCH(kernels::restore_particle_state_kernel, G_N, B,
         this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
         this->angle.ptr(), this->last_state_angle.ptr(),
-        this->mass.ptr(), this->last_state_mass.ptr(),
-        this->moment_inertia.ptr(), this->last_state_moment_inertia.ptr(),
-        this->n_vertices_per_particle.ptr(), this->last_state_n_vertices_per_particle.ptr(),
         flag.ptr(), true_val);
     CUDA_LAUNCH(kernels::restore_vertex_state_kernel, G_V, B,
         this->vertex_rad.ptr(), this->last_state_vertex_rad.ptr(),
@@ -1592,15 +1573,6 @@ void RigidBumpy::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     CUDA_LAUNCH(kernels::restore_system_state_kernel, G_S, B,
         this->box_size.xptr(), this->box_size.yptr(), this->last_state_box_size.xptr(), this->last_state_box_size.yptr(),
         flag.ptr(), true_val);
-
-    // TODO: i am not sure we need this anymore
-    // recalculate particle offset using an exclusive scan of n_vertices_per_particle
-    thrust::exclusive_scan(
-        thrust::device,
-        this->n_vertices_per_particle.ptr(),
-        this->n_vertices_per_particle.ptr() + N,
-        this->particle_offset.ptr()
-    );
 }
 
 void RigidBumpy::load_static_from_hdf5_poly_extras_impl(hid_t group) {

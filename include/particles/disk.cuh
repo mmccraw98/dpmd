@@ -45,6 +45,9 @@ public:
     // Update the velocities of the particles
     void update_velocities_impl(df::DeviceField1D<double> scale, double scale2);
 
+    // Set the velocities to zero
+    void zero_velocities_impl();
+
     // Scale the velocities of the particles
     void scale_velocities_impl(df::DeviceField1D<double> scale);
 
@@ -149,6 +152,7 @@ private:
     df::DeviceField2D<double> last_state_pos;
     df::DeviceField1D<double> last_state_rad;
     df::DeviceField1D<double> last_state_mass;
+    df::DeviceField1D<int> last_state_static_index;
     df::DeviceField2D<double> last_state_box_size;
 };
 

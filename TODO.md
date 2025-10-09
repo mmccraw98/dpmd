@@ -1,4 +1,6 @@
 // TODO: handling ragged array saving does not work properly.  once an array is deteced as ragged, its data up to that point is erased.  from then on, it is saved under a ragged group in the dataset
+
+// TODO: implement morton / hilbert curves for cells
 // TODO: add compile flag for using stiffness or energy interactions - add a function to handle?
 // TODO: implement hessian
 // TODO: add heirarchical pre-req calculations!!!!!!

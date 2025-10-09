@@ -57,6 +57,9 @@ public:
     // Update the velocities of the particles
     void update_velocities_impl(df::DeviceField1D<double> scale, double scale2);
 
+    // Set the velocities to zero
+    void zero_velocities_impl();
+
     // Scale the velocities of the particles
     void scale_velocities_impl(df::DeviceField1D<double> scale);
 

@@ -356,6 +356,8 @@ __global__ void save_particle_state_kernel(
     double* __restrict__ last_rad,
     double* __restrict__ mass,
     double* __restrict__ last_mass,
+    int* __restrict__ static_index,
+    int* __restrict__ last_static_index,
     int* __restrict__ flag,
     int true_val
 ) {
@@ -368,6 +370,7 @@ __global__ void save_particle_state_kernel(
     last_y[i] = y[i];
     last_rad[i] = rad[i];
     last_mass[i] = mass[i];
+    last_static_index[i] = static_index[i];
 }
 
 __global__ void save_system_state_kernel(
@@ -396,6 +399,8 @@ __global__ void restore_particle_state_kernel(
     double* __restrict__ last_rad,
     double* __restrict__ mass,
     double* __restrict__ last_mass,
+    int* __restrict__ static_index,
+    int* __restrict__ last_static_index,
     int* __restrict__ flag,
     int true_val
 ) {
@@ -408,6 +413,7 @@ __global__ void restore_particle_state_kernel(
     y[i] = last_y[i];
     rad[i] = last_rad[i];
     mass[i] = last_mass[i];
+    static_index[i] = last_static_index[i];
 }
 
 __global__ void restore_system_state_kernel(
@@ -725,6 +731,10 @@ void Disk::update_velocities_impl(df::DeviceField1D<double> scale, double scale2
     );
 }
 
+void Disk::zero_velocities_impl() {
+    this->vel.fill(0.0, 0.0);
+}
+
 void Disk::scale_velocities_impl(df::DeviceField1D<double> scale) {
     const int N = n_particles();
     auto B = md::launch::threads_for();
@@ -940,6 +950,9 @@ void Disk::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
     if (this->last_state_box_size.size() != this->box_size.size()) {
         this->last_state_box_size.resize(this->box_size.size());
     }
+    if (this->last_state_static_index.size() != this->static_index.size()) {
+        this->last_state_static_index.resize(this->static_index.size());
+    }
     
     const int N = n_particles();
     const int S = n_systems();
@@ -950,6 +963,7 @@ void Disk::save_state_impl(df::DeviceField1D<int> flag, int true_val) {
         this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
         this->rad.ptr(), this->last_state_rad.ptr(),
         this->mass.ptr(), this->last_state_mass.ptr(),
+        this->static_index.ptr(), this->last_state_static_index.ptr(),
         flag.ptr(), true_val
     );
     CUDA_LAUNCH(kernels::save_system_state_kernel, G_S, B,
@@ -971,6 +985,9 @@ void Disk::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
     if (this->last_state_box_size.size() != this->box_size.size()) {
         throw std::runtime_error("Disk::restore_state_impl: last_state_box_size is not initialized");
     }
+    if (this->last_state_static_index.size() != this->static_index.size()) {
+        throw std::runtime_error("Disk::restore_state_impl: last_state_static_index is not initialized");
+    }
     const int N = n_particles();
     const int S = n_systems();
     auto B = md::launch::threads_for();
@@ -980,6 +997,7 @@ void Disk::restore_state_impl(df::DeviceField1D<int> flag, int true_val) {
         this->pos.xptr(), this->pos.yptr(), this->last_state_pos.xptr(), this->last_state_pos.yptr(),
         this->rad.ptr(), this->last_state_rad.ptr(),
         this->mass.ptr(), this->last_state_mass.ptr(),
+        this->static_index.ptr(), this->last_state_static_index.ptr(),
         flag.ptr(), true_val
     );
     CUDA_LAUNCH(kernels::restore_system_state_kernel, G_S, B,

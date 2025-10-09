@@ -452,6 +452,9 @@ public:
         set_temperature(temperature_target_df, remove_average_velocity);
     }
 
+    // Set the velocities to zero
+    void zero_velocities() { derived().zero_velocities_impl(); }
+
     // Scale the velocities of the particles
     void scale_velocities(df::DeviceField1D<double> scale) { derived().scale_velocities_impl(scale); }
 
@@ -664,8 +667,8 @@ public:
         // to the pairwise force calculation step.
         // Furthermore, the compute_stress_tensor_total sums over the off-diagonal components of the stress tensor.
         // For pressure, you only need the diagonal components.
-        // compute_stress_tensor();  // commenting these out for run-efficiency on the server
-        // compute_stress_tensor_total();
+        compute_stress_tensor();
+        compute_stress_tensor_total();
         const int S = this->n_systems();
         auto B = md::launch::threads_for();
         auto G = md::launch::blocks_for(S);
@@ -695,6 +698,10 @@ public:
     void restore_state(df::DeviceField1D<int> flag, int true_val) {
         derived().restore_state_impl(flag, true_val);
         sync_box();
+        sync_system();
+        if (get_neighbor_method() == NeighborMethod::Cell) {
+            sync_cells();
+        }
         sync_class_constants();
         check_neighbors(true);  // force a neighbor list rebuild
     }
@@ -901,7 +908,7 @@ public:
         }
         {
             FieldSpec2D<double> p;
-            p.preprocess = [this]{ this->compute_stress_tensor_total(); };
+            // p.preprocess = [this]{ this->compute_stress_tensor_total(); };
             p.get_device_field = [this]{ return &this->stress_tensor_total_y; };
             reg.fields["stress_tensor_total_y"] = p;
         }
@@ -994,6 +1001,7 @@ protected:
     void compute_damping_forces_impl(double) {}
     void sync_class_constants_impl() {}
     void mix_velocities_and_forces_impl(double) {}
+    void zero_velocities_impl() {}
     void scale_velocities_impl(double) {}
     df::DeviceField2D<double> calculate_average_velocity_impl() { return df::DeviceField2D<double>(0, 0); }
     void set_average_velocity_impl(df::DeviceField2D<double>) {}

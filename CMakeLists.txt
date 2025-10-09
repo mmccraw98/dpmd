@@ -3,6 +3,14 @@
 # OPTIONS:
 # -DCMAKE_BUILD_TYPE=Debug, Release
 # -DENABLE_CUDA_DEBUG=ON, OFF
+# FOR BUILDING ON GRACE:
+# un-comment line 39 to build for all GPUs on the cluster
+# load the following modules before compiling:
+# module purge
+# module load GCC/10.2.0
+# module load CUDA/11.8.0
+# module load CMake/3.18.4-GCCcore-10.2.0
+# module load HDF5/1.10.7-gompi-2020b
 
 cmake_minimum_required(VERSION 3.18)
 
@@ -126,6 +134,8 @@ set(TEST_SOURCES
     tests/damped_dynamics_compress_to_packing_fraction.cu
     tests/nvt_rescale_disk_pbc_compress.cu
     tests/nvt_rescale_rigid_bumpy_pbc_compress.cu
+    tests/rigid_bumpy_jam_pbc.cu
+    tests/disk_jam_pbc.cu
 )
 
 # Create test executables

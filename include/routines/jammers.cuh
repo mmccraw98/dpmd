@@ -79,6 +79,9 @@ void jam_binary_search_pbc(
     df::DeviceField1D<double> scale_factor; scale_factor.resize(S); scale_factor.fill(0.0);
     df::DeviceField1D<double> phi, phi_low, phi_high; phi.resize(S); phi_low.resize(S); phi_high.resize(S);
 
+    // set the velocities to zero initially
+    P.zero_velocities();
+
     // run initial minimization
     minimize_fire_copy_dt(P, dt, max_minimization_steps, avg_pe_target, avg_pe_diff_target);
 

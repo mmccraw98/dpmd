@@ -8,15 +8,15 @@
 #include "utils/output_manager.hpp"
 
 int main(int argc, char** argv) {
-    if (argc != 5) {
-        std::cerr << "Usage: " << argv[0] << " <in_path> <out_path> <n_steps> <save_increment>" << std::endl;
+    if (argc != 6) {
+        std::cerr << "Usage: " << argv[0] << " <in_path> <out_path> <n_steps> <save_increment> <dt_scale>" << std::endl;
         return 1;
     }
     std::string in_path = argv[1];
     std::string out_path = argv[2];
     const int n_steps = std::stoi(argv[3]);
     const int save_increment = std::stoi(argv[4]);
-    const double dt_scale = 1e-2;
+    const double dt_scale = std::stod(argv[5]);
 
     md::disk::Disk P;
     P.load_from_hdf5(in_path, "init");
@@ -26,10 +26,12 @@ int main(int argc, char** argv) {
     vv.init();
 
     io::OutputManager<md::disk::Disk> om(P, out_path, 10, false);
-    om.set_extra_init_fields({"pos", "vel"});
-    om.set_extra_final_fields({"pos", "vel"});
+    om.set_extra_init_fields({});
+    om.set_extra_final_fields({});
     // om.set_trajectory_fields({"pos", "vel", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
-    om.set_trajectory_fields({"pos", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
+    // om.set_trajectory_fields({"pos", "pressure", "temperature", "overlaps", "pe_total"});
+    // om.set_trajectory_fields({"pos", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
+    om.set_trajectory_fields({"pos", "pe_total", "ke_total", "temperature", "stress_tensor_total_x", "stress_tensor_total_y", "pressure"});
     om.set_trajectory_interval(save_increment);
     om.initialize();
 
