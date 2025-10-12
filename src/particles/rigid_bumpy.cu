@@ -883,12 +883,15 @@ __global__ void compute_friction_coeff_kernel(
                 force_y -= fmag * ny;
             }
         }
-        double normal_force_x = force_x * dist_x / r_particle;
-        double normal_force_y = force_y * dist_y / r_particle;
-        double normal_force = sqrt(normal_force_x * normal_force_x + normal_force_y * normal_force_y);
+        double normal_x = dist_x / r_particle;
+        double normal_y = dist_y / r_particle;
+        double normal_force_x = force_x * normal_x;
+        double normal_force_y = force_y * normal_y;
+        double f_n_scalar = normal_force_x + normal_force_y;
+        double normal_force = fabs(f_n_scalar);
         if (normal_force == 0.0) continue;
-        double tangential_force_x = force_x - normal_force_x;
-        double tangential_force_y = force_y - normal_force_y;
+        double tangential_force_x = force_x - f_n_scalar * normal_x;
+        double tangential_force_y = force_y - f_n_scalar * normal_y;
         double tangential_force = sqrt(tangential_force_x * tangential_force_x + tangential_force_y * tangential_force_y);
         friction_coeff[p_k] = tangential_force / normal_force;
         pair_ids_i[p_k] = i;
@@ -1127,6 +1130,141 @@ __global__ void set_average_velocity_kernel(
     }
 }
 
+__global__ void compute_hessian_kernel(
+    const double* __restrict__ vertex_pos_x,
+    const double* __restrict__ vertex_pos_y,
+    const double* __restrict__ pos_x,
+    const double* __restrict__ pos_y,
+    const int* __restrict__ particle_neighbor_start, const int* __restrict__ particle_neighbor_ids,
+    int* __restrict__ pair_ids_i, int* __restrict__ pair_ids_j,
+    double* __restrict__ hessian_ix_ix, double* __restrict__ hessian_ix_jx,
+    double* __restrict__ hessian_ix_iy, double* __restrict__ hessian_ix_jy,
+    double* __restrict__ hessian_iy_ix, double* __restrict__ hessian_iy_jx,
+    double* __restrict__ hessian_iy_iy, double* __restrict__ hessian_iy_jy,
+    double* __restrict__ hessian_ix_it, double* __restrict__ hessian_ix_jt,
+    double* __restrict__ hessian_it_ix, double* __restrict__ hessian_it_jx,
+    double* __restrict__ hessian_iy_it, double* __restrict__ hessian_iy_jt,
+    double* __restrict__ hessian_it_iy, double* __restrict__ hessian_it_jy,
+    double* __restrict__ hessian_it_it, double* __restrict__ hessian_it_jt
+) {
+    const int Nv = md::geo::g_sys.n_vertices;
+    int u = blockIdx.x * blockDim.x + threadIdx.x;
+    if (u >= Nv) return;
+    const int sid = md::poly::g_vertex_sys.id[u];
+    const double e_i = g_rigid_bumpy.e_interaction[sid];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const double x_u = vertex_pos_x[u], y_u = vertex_pos_y[u];
+    const double r_u = g_rigid_bumpy.vertex_rad[u];
+    const int pid = md::poly::g_poly.particle_id[u];
+    const double x_i = pos_x[pid], y_i = pos_y[pid];
+    const double rel_x_u = x_u - x_i;
+    const double rel_y_u = y_u - y_i;
+    std::array<double, 9> hessian_ia_ib = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    std::array<double, 9> hessian_ia_jb = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    
+    // loop over vertex neighbors
+    const int beg = md::geo::g_neigh.start[u];
+    const int end = md::geo::g_neigh.start[u+1];
+    for (int j = beg; j < end; j++) {
+        const int v = md::geo::g_neigh.ids[j];
+        const double x_v = vertex_pos_x[v], y_v = vertex_pos_y[v];
+        const double r_v = g_rigid_bumpy.vertex_rad[v];
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(x_u, y_u, x_v, y_v, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+        const double radsum = r_u + r_v;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+
+        const double r   = sqrt(r2);
+        const double inv = 1.0 / r;
+        const double nx  = dx * inv;
+        const double ny  = dy * inv;
+
+        const double delta = radsum - r;
+        const double fmag  = e_i * delta;
+
+        // hessian terms
+        double t_ij = - fmag;
+        double c_ij = e_i;
+
+        const int pid_v = md::poly::g_poly.particle_id[v];
+        const double x_j = pos_x[pid_v], y_j = pos_y[pid_v];
+        const double rel_x_v = x_v - x_j;
+        const double rel_y_v = y_v - y_j;
+
+        // loop over the Hessian terms
+        for (int a = 0; a < 3; a++) {
+            for (int b = 0; b < 3; b++) {
+                // off-diagonal block
+                double d_ia_dx = (a == 0) - rel_y_u * (a == 2);
+                double d_ia_dy = (a == 1) + rel_x_u * (a == 2);
+                double d_jb_dx = -1.0 * ((b == 0) - rel_y_v * (b == 2));
+                double d_jb_dy = -1.0 * ((b == 1) + rel_x_v * (b == 2));
+
+                double q_ia = dx * d_ia_dx + dy * d_ia_dy;
+                double q_jb = dx * d_jb_dx + dy * d_jb_dy;
+
+                double d_ia_q_jb = (d_ia_dx * d_jb_dx + d_ia_dy * d_jb_dy) / r;  // there are no second derivatives here since i and j are different coordinates
+
+                hessian_ia_jb[a * 3 + b] += c_ij * q_ia * q_jb / r2 + t_ij * (d_ia_q_jb - q_ia * q_jb / (r2 * r));
+
+                // diagonal block
+                double d_ib_dx = (b == 0) - rel_y_u * (b == 2);
+                double d_ib_dy = (b == 1) + rel_x_u * (b == 2);
+
+                // there are now some second derivatives
+                double d_ia_ib_dx = - rel_x_u * (a == 2) * (b == 2);
+                double d_ia_ib_dy = - rel_y_u * (a == 2) * (b == 2);
+
+                double q_ib = dx * d_ib_dx + dy * d_ib_dy;
+
+                double d_ia_q_ib = (d_ia_dx * d_ib_dx + dx * d_ia_ib_dx + d_ia_dy * d_ib_dy + dy * d_ia_ib_dy) / r;
+
+                hessian_ia_ib[a * 3 + b] += c_ij * q_ia * q_ib / r2 + t_ij * (d_ia_q_ib - q_ia * q_ib / (r2 * r));
+            }
+        }
+
+        // find the pair id for the particle pair
+        int pair_id = -1;
+        for (int p_k = particle_neighbor_start[pid]; p_k < particle_neighbor_start[pid+1]; p_k++) {
+            const int j = particle_neighbor_ids[p_k];
+            if (j == pid_v) {
+                pair_id = p_k;
+                break;
+            }
+        }
+        if (pair_id == -1) {
+            printf("ERROR");
+        }
+        // set the pair ids
+        atomicExch(&pair_ids_i[pair_id], pid);
+        atomicExch(&pair_ids_j[pair_id], pid_v);
+
+        // add the Hessian terms to the total Hessian
+        atomicAdd(&hessian_ix_ix[pair_id], hessian_ia_ib[0]);
+        atomicAdd(&hessian_ix_iy[pair_id], hessian_ia_ib[1]);
+        atomicAdd(&hessian_ix_it[pair_id], hessian_ia_ib[2]);
+        atomicAdd(&hessian_iy_ix[pair_id], hessian_ia_ib[3]);
+        atomicAdd(&hessian_iy_iy[pair_id], hessian_ia_ib[4]);
+        atomicAdd(&hessian_iy_it[pair_id], hessian_ia_ib[5]);
+        atomicAdd(&hessian_it_ix[pair_id], hessian_ia_ib[6]);
+        atomicAdd(&hessian_it_iy[pair_id], hessian_ia_ib[7]);
+        atomicAdd(&hessian_it_it[pair_id], hessian_ia_ib[8]);
+
+        atomicAdd(&hessian_ix_jx[pair_id], hessian_ia_jb[0]);
+        atomicAdd(&hessian_ix_jy[pair_id], hessian_ia_jb[1]);
+        atomicAdd(&hessian_ix_jt[pair_id], hessian_ia_jb[2]);
+        atomicAdd(&hessian_iy_jx[pair_id], hessian_ia_jb[3]);
+        atomicAdd(&hessian_iy_jy[pair_id], hessian_ia_jb[4]);
+        atomicAdd(&hessian_iy_jt[pair_id], hessian_ia_jb[5]);
+        atomicAdd(&hessian_it_jx[pair_id], hessian_ia_jb[6]);
+        atomicAdd(&hessian_it_jy[pair_id], hessian_ia_jb[7]);
+        atomicAdd(&hessian_it_jt[pair_id], hessian_ia_jb[8]);
+    }
+}
 
 } // namespace kernels
 
@@ -1476,6 +1614,47 @@ void RigidBumpy::compute_overlaps_impl() {
     );
 }
 
+void RigidBumpy::compute_hessian_impl() {
+    this->build_particle_neighbors();
+    const int M = this->particle_neighbor_ids.size();
+    if (this->hessian_xx.size() != M) this->hessian_xx.resize(M);
+    if (this->hessian_xy.size() != M) this->hessian_xy.resize(M);
+    if (this->hessian_yx.size() != M) this->hessian_yx.resize(M);
+    if (this->hessian_yy.size() != M) this->hessian_yy.resize(M);
+    if (this->hessian_xt.size() != M) this->hessian_xt.resize(M);
+    if (this->hessian_tx.size() != M) this->hessian_tx.resize(M);
+    if (this->hessian_yt.size() != M) this->hessian_yt.resize(M);
+    if (this->hessian_ty.size() != M) this->hessian_ty.resize(M);
+    if (this->hessian_tt.size() != M) this->hessian_tt.resize(M);
+
+    this->hessian_xx.fill(0.0, 0.0);
+    this->hessian_xy.fill(0.0, 0.0);
+    this->hessian_yx.fill(0.0, 0.0);
+    this->hessian_yy.fill(0.0, 0.0);
+    this->hessian_xt.fill(0.0, 0.0);
+    this->hessian_tx.fill(0.0, 0.0);
+    this->hessian_yt.fill(0.0, 0.0);
+    this->hessian_ty.fill(0.0, 0.0);
+    this->hessian_tt.fill(0.0, 0.0);
+    const int Nv = n_vertices();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(Nv);
+    CUDA_LAUNCH(kernels::compute_hessian_kernel, G, B,
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(),
+        this->pos.xptr(), this->pos.yptr(),
+        this->particle_neighbor_start.ptr(), this->particle_neighbor_ids.ptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->hessian_xx.xptr(), this->hessian_xx.yptr(),
+        this->hessian_xy.xptr(), this->hessian_xy.yptr(),
+        this->hessian_yx.xptr(), this->hessian_yx.yptr(),
+        this->hessian_yy.xptr(), this->hessian_yy.yptr(),
+        this->hessian_xt.xptr(), this->hessian_xt.yptr(),
+        this->hessian_tx.xptr(), this->hessian_tx.yptr(),
+        this->hessian_yt.xptr(), this->hessian_yt.yptr(),
+        this->hessian_ty.xptr(), this->hessian_ty.yptr(),
+        this->hessian_tt.xptr(), this->hessian_tt.yptr());
+}
+
 void RigidBumpy::compute_stress_tensor_impl() {
     const int N = n_particles();
     if (this->stress_tensor_x.size() != N) {
@@ -1685,13 +1864,14 @@ void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg)
     }
     {
         FieldSpec1D<double> p;
-        p.preprocess = [this]{ this->compute_contacts(); this->compute_friction_coeff(); };
+        // p.preprocess = [this]{ this->compute_contacts(); this->compute_friction_coeff(); };
+        p.preprocess = [this]{ this->compute_friction_coeff(); };
         p.get_device_field = [this]{ return &this->friction_coeff; };
         reg.fields["friction_coeff"] = p;
     }
     {
         FieldSpec2D<int> p;
-        p.preprocess = [this]{ this->compute_contacts(); };
+        // p.preprocess = [this]{ this->compute_contacts(); };
         p.get_device_field = [this]{ return &this->pair_vertex_contacts; };
         reg.fields["pair_vertex_contacts"] = p;
     }
@@ -1700,6 +1880,36 @@ void RigidBumpy::output_build_registry_poly_extras_impl(io::OutputRegistry& reg)
         p.preprocess = [this]{ this->build_particle_neighbors(); this->compute_pair_dist(); };
         p.get_device_field = [this]{ return &this->pair_dist; };
         reg.fields["pair_dist"] = p;
+    }
+    {
+        FieldSpec2D<double> p; 
+        // p.preprocess = [this]{ this->compute_hessian(); };
+        p.get_device_field = [this]{ return &this->hessian_xt; };
+        reg.fields["hessian_xt"] = p;
+    }
+    {
+        FieldSpec2D<double> p; 
+        // p.preprocess = [this]{ this->compute_hessian(); };
+        p.get_device_field = [this]{ return &this->hessian_tx; };
+        reg.fields["hessian_tx"] = p;
+    }
+    {
+        FieldSpec2D<double> p; 
+        // p.preprocess = [this]{ this->compute_hessian(); };
+        p.get_device_field = [this]{ return &this->hessian_yt; };
+        reg.fields["hessian_yt"] = p;
+    }
+    {
+        FieldSpec2D<double> p; 
+        // p.preprocess = [this]{ this->compute_hessian(); };
+        p.get_device_field = [this]{ return &this->hessian_ty; };
+        reg.fields["hessian_ty"] = p;
+    }
+    {
+        FieldSpec2D<double> p; 
+        // p.preprocess = [this]{ this->compute_hessian(); };
+        p.get_device_field = [this]{ return &this->hessian_tt; };
+        reg.fields["hessian_tt"] = p;
     }
 }
 

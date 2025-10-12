@@ -32,6 +32,7 @@ int main(int argc, char** argv) {
     // om.set_trajectory_fields({"contacts", "n_contacts_total", "pair_ids", "friction_coeff", "pair_vertex_contacts"});
     // om.set_trajectory_fields({"pos", "pe_total", "ke_total", "temperature", "stress_tensor_total_x", "stress_tensor_total_y", "pressure"});
     om.set_trajectory_fields({"temperature", "stress_tensor_total_x", "stress_tensor_total_y"});
+    // om.set_trajectory_fields({"pos", "n_contacts_total", "contacts", "pair_vertex_contacts", "friction_coeff", "torque", "force", "pair_ids"});
     // om.set_trajectory_fields({"pos", "angle", "vel", "angular_vel"});
     om.set_trajectory_interval(save_increment);
     om.initialize();

@@ -136,6 +136,7 @@ set(TEST_SOURCES
     tests/nvt_rescale_rigid_bumpy_pbc_compress.cu
     tests/rigid_bumpy_jam_pbc.cu
     tests/disk_jam_pbc.cu
+    tests/rigid_bumpy_calculate.cu
 )
 
 # Create test executables

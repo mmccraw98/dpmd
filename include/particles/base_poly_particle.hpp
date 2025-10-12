@@ -438,7 +438,7 @@ public:
         }
         {
             FieldSpec1D<int> p; 
-            p.preprocess = [this]{ this->compute_contacts(); };
+            // p.preprocess = [this]{ this->compute_contacts(); };
             p.get_device_field = [this]{ return &this->contacts; };
             reg.fields["contacts"] = p;
         }

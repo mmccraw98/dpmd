@@ -38,6 +38,10 @@ public:
     // Miscellaneous particle-level fields
     df::DeviceField1D<int>    contacts;  // (N,) - number of particle-particle contacts for each particle
     df::DeviceField2D<double> overlaps;  // (N, 2) - [total overlap, total contact]
+    df::DeviceField2D<double> hessian_xx;  // (N, 2) - H_ix_ix, H_ix_jx for each particle
+    df::DeviceField2D<double> hessian_xy;  // (N, 2) - H_ix_iy, H_ix_jy for each particle
+    df::DeviceField2D<double> hessian_yx;  // (N, 2) - H_iy_ix, H_iy_jx for each particle
+    df::DeviceField2D<double> hessian_yy;  // (N, 2) - H_iy_iy, H_iy_jy for each particle
 
     // Neighbor list fields
     df::DeviceField1D<int>    neighbor_count; // (N,) - number of neighbors for each particle
@@ -680,6 +684,9 @@ public:
     // Compute the overlaps for each particle
     void compute_overlaps() { derived().compute_overlaps_impl(); }
 
+    // Compute the Hessian
+    void compute_hessian() {derived().compute_hessian_impl();}
+
     // Compute the total power of each system (used for the FIRE algorithm)
     void compute_fpower_total() { derived().compute_fpower_total_impl(); }
 
@@ -884,7 +891,7 @@ public:
         }
         {
             FieldSpec2D<int> p; 
-            p.preprocess = [this]{ this->compute_pair_dist(); };
+            // p.preprocess = [this]{ this->compute_pair_dist(); };
             p.get_device_field = [this]{ return &this->pair_ids; };
             reg.fields["pair_ids"] = p;
         }
@@ -917,6 +924,30 @@ public:
             p.preprocess = [this]{ this->compute_pressure(); };
             p.get_device_field = [this]{ return &this->pressure; };
             reg.fields["pressure"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_hessian(); };
+            p.get_device_field = [this]{ return &this->hessian_xx; };
+            reg.fields["hessian_xx"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            // p.preprocess = [this]{ this->compute_hessian(); };
+            p.get_device_field = [this]{ return &this->hessian_xy; };
+            reg.fields["hessian_xy"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            // p.preprocess = [this]{ this->compute_hessian(); };
+            p.get_device_field = [this]{ return &this->hessian_yx; };
+            reg.fields["hessian_yx"] = p;
+        }
+        {
+            FieldSpec2D<double> p; 
+            // p.preprocess = [this]{ this->compute_hessian(); };
+            p.get_device_field = [this]{ return &this->hessian_yy; };
+            reg.fields["hessian_yy"] = p;
         }
         derived().output_build_registry_impl(reg);
     }
@@ -1019,6 +1050,7 @@ protected:
     void set_random_positions_in_domains_impl() {}
     void compute_fpower_total_impl() {}
     void compute_contacts_impl() {}
+    void compute_hessian_impl() {}
     void compute_pair_dist_impl() {}
     void compute_overlaps_impl() {}
     void save_state_impl(df::DeviceField1D<int>, int) {}

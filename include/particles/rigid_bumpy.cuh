@@ -38,6 +38,11 @@ public:
     df::DeviceField1D<double>       moment_inertia; // (N,) - moment of inertia of the particle
     df::DeviceField1D<double>       friction_coeff; // (N_particle_neighbors,) - friction coefficient for each pair of particles
     df::DeviceField2D<int>          pair_vertex_contacts;     // (N_particle_neighbors,2) - number of vertex contacts for each pair of particles
+    df::DeviceField2D<double> hessian_xt;  // (N, 2) - H_ix_it, H_ix_jt for each particle
+    df::DeviceField2D<double> hessian_tx;  // (N, 2) - H_it_ix, H_it_jx for each particle
+    df::DeviceField2D<double> hessian_yt;  // (N, 2) - H_iy_it, H_iy_jt for each particle
+    df::DeviceField2D<double> hessian_ty;  // (N, 2) - H_it_iy, H_it_jy for each particle
+    df::DeviceField2D<double> hessian_tt;  // (N, 2) - H_it_it, H_it_jt for each particle
 
     // Sum up the forces on the particles
     void compute_particle_forces();
@@ -125,6 +130,9 @@ public:
 
     // Compute the overlaps for each particle
     void compute_overlaps_impl();
+
+    // Compute the Hessian for each particle
+    void compute_hessian_impl();
 
     // Compute the stress tensor for each system
     void compute_stress_tensor_impl();
