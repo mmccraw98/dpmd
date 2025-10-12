@@ -510,6 +510,159 @@ __global__ void compute_pair_dist_kernel(
     }
 }
 
+__global__ void compute_particle_pair_forces_kernel(
+    const double* __restrict__ x,
+    const double* __restrict__ y,
+    double* __restrict__ pair_forces_x,
+    double* __restrict__ pair_forces_y,
+    int* __restrict__ pair_ids_i, 
+    int* __restrict__ pair_ids_j,
+    const int* __restrict__ static_index
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int i_static = static_index[i];
+
+    const int sid = md::geo::g_sys.id[i];
+    const double e_i = g_disk.e_interaction[sid];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+
+    const double xi = x[i], yi = y[i];
+    const double ri = g_disk.rad[i];
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const double xj = x[j], yj = y[j];
+        const double rj = g_disk.rad[j];
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+
+        // Early reject if no overlap: r^2 >= (ri+rj)^2
+        const double radsum = ri + rj;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+
+        // Overlap: compute r and invr once
+        const double r   = sqrt(r2);
+        const double inv = 1.0 / r;
+        const double nx  = dx * inv;
+        const double ny  = dy * inv;
+
+        const double delta = radsum - r;
+        const double fmag  = e_i * delta;
+
+        // Force on i is along -n (repulsion)
+        pair_forces_x[k] -= fmag * nx;
+        pair_forces_y[k] -= fmag * ny;
+        pair_ids_i[k] = i_static;
+        pair_ids_j[k] = static_index[j];
+    }
+}
+
+__global__ void compute_hessian_kernel(
+    const double* __restrict__ x,
+    const double* __restrict__ y,
+    int* __restrict__ pair_ids_i,
+    int* __restrict__ pair_ids_j,
+    const int* __restrict__ static_index,
+    double* __restrict__ hessian_ix_ix, double* __restrict__ hessian_ix_jx,
+    double* __restrict__ hessian_ix_iy, double* __restrict__ hessian_ix_jy,
+    double* __restrict__ hessian_iy_ix, double* __restrict__ hessian_iy_jx,
+    double* __restrict__ hessian_iy_iy, double* __restrict__ hessian_iy_jy
+) {
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int i_static = static_index[i];
+
+    const int sid = md::geo::g_sys.id[i];
+    const double e_i = g_disk.e_interaction[sid];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+
+    const double xi = x[i], yi = y[i];
+    const double ri = g_disk.rad[i];
+
+    const int beg = md::geo::g_neigh.start[i];
+    const int end = md::geo::g_neigh.start[i+1];
+
+    for (int k = beg; k < end; ++k) {
+        const int j = md::geo::g_neigh.ids[k];
+        const double xj = x[j], yj = y[j];
+        const double rj = g_disk.rad[j];
+
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+        const double radsum = ri + rj;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+
+        const double r = sqrt(r2);
+        const double inv = 1.0 / r;
+        const double nx = dx * inv;
+        const double ny = dy * inv;
+
+        const double delta = radsum - r;
+        const double t_ij = - e_i * delta;
+        const double c_ij = e_i;
+
+        std::array<double, 4> hessian_ia_ib = {0.0, 0.0, 0.0, 0.0};
+        std::array<double, 4> hessian_ia_jb = {0.0, 0.0, 0.0, 0.0};
+
+        for (long a = 0; a < 2; a++) {
+            for (long b = 0; b < 2; b++) {
+                // off-diagonal terms
+                double d_ia_dx = 1 * (a == 0);
+                double d_ia_dy = 1 * (a == 1);
+                double d_jb_dx = -1 * (b == 0);
+                double d_jb_dy = -1 * (b == 1);
+
+                double d_ia_d_jb_dx = 0;
+                double d_ia_d_jb_dy = 0;
+
+                double q_ia = dx * d_ia_dx + dy * d_ia_dy;
+                double q_jb = dx * d_jb_dx + dy * d_jb_dy;
+
+                double d_ia_q_jb = d_ia_dx * d_jb_dx + dx * d_ia_d_jb_dx + d_ia_dy * d_jb_dy + dy * d_ia_d_jb_dy;
+                
+                hessian_ia_jb[a * 2 + b] += c_ij * (q_ia * q_jb) / (r2) + t_ij * (d_ia_q_jb / r - (q_ia * q_jb) / (r2 * r));
+
+                // diagonal terms
+                double d_ib_dx = 1 * (b == 0);
+                double d_ib_dy = 1 * (b == 1);
+
+                double d_ia_d_ib_dx = 0;
+                double d_ia_d_ib_dy = 0;
+                
+                double q_ib = dx * d_ib_dx + dy * d_ib_dy;
+
+                double d_ia_q_ib = d_ia_dx * d_ib_dx + dx * d_ia_d_ib_dx + d_ia_dy * d_ib_dy + dy * d_ia_d_ib_dy;
+                
+                hessian_ia_ib[a * 2 + b] += c_ij * (q_ia * q_ib) / (r2) + t_ij * (d_ia_q_ib / r - (q_ia * q_ib) / (r2 * r));
+            }
+        }
+        pair_ids_i[k] = i_static;
+        pair_ids_j[k] = static_index[j];
+        hessian_ix_ix[k] += hessian_ia_ib[0];
+        hessian_ix_iy[k] += hessian_ia_ib[1];
+        hessian_iy_ix[k] += hessian_ia_ib[2];
+        hessian_iy_iy[k] += hessian_ia_ib[3];
+
+        hessian_ix_jx[k] += hessian_ia_jb[0];
+        hessian_ix_jy[k] += hessian_ia_jb[1];
+        hessian_iy_jx[k] += hessian_ia_jb[2];
+        hessian_iy_jy[k] += hessian_ia_jb[3];
+    }
+}
+
 __global__ void compute_overlaps_kernel(
     const double* __restrict__ x,
     const double* __restrict__ y,
@@ -810,13 +963,19 @@ void Disk::compute_fpower_total_impl() {
 }
 
 void Disk::compute_contacts_impl() {
+    std::cout << "Computing contacts" << std::endl;
     const int N = n_particles();
+    if (this->contacts.size() != N) {
+        this->contacts.resize(N);
+    }
+    this->contacts.fill(0);
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);
     CUDA_LAUNCH(kernels::compute_contacts_kernel, G, B,
         this->pos.xptr(), this->pos.yptr(),
         this->contacts.ptr()
     );
+    std::cout << "Contacts computed" << std::endl;
 }
 
 void Disk::compute_pair_dist_impl() {
@@ -840,6 +999,63 @@ void Disk::compute_pair_dist_impl() {
         this->static_index.ptr(),
         this->pair_dist.ptr()
     );
+}
+
+void Disk::compute_hessian_impl() {
+    std::cout << "Computing hessian" << std::endl;
+    const int N = n_particles();
+    if (this->hessian_xx.size() != n_neighbors()) {
+        this->hessian_xx.resize(n_neighbors());
+    }
+    if (this->hessian_xy.size() != n_neighbors()) {
+        this->hessian_xy.resize(n_neighbors());
+    }
+    if (this->hessian_yx.size() != n_neighbors()) {
+        this->hessian_yx.resize(n_neighbors());
+    }
+    if (this->hessian_yy.size() != n_neighbors()) {
+        this->hessian_yy.resize(n_neighbors());
+    }
+    if (this->pair_ids.size() != n_neighbors()) {
+        this->pair_ids.resize(n_neighbors());
+    }
+    this->hessian_xx.fill(0.0, 0.0);
+    this->hessian_xy.fill(0.0, 0.0);
+    this->hessian_yx.fill(0.0, 0.0);
+    this->hessian_yy.fill(0.0, 0.0);
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::compute_hessian_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->static_index.ptr(),
+        this->hessian_xx.xptr(), this->hessian_xx.yptr(),
+        this->hessian_xy.xptr(), this->hessian_xy.yptr(),
+        this->hessian_yx.xptr(), this->hessian_yx.yptr(),
+        this->hessian_yy.xptr(), this->hessian_yy.yptr()
+    );
+    std::cout << "Hessian computed" << std::endl;
+}
+
+void Disk::compute_pair_forces_impl() {
+    std::cout << "Computing pair forces" << std::endl;
+    const int N = n_particles();
+    if (this->pair_forces.size() != n_neighbors()) {
+        this->pair_forces.resize(n_neighbors());
+    }
+    if (this->pair_ids.size() != n_neighbors()) {
+        this->pair_ids.resize(n_neighbors());
+    }
+    this->pair_forces.fill(0.0, 0.0);
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(N);
+    CUDA_LAUNCH(kernels::compute_particle_pair_forces_kernel, G, B,
+        this->pos.xptr(), this->pos.yptr(),
+        this->pair_forces.xptr(), this->pair_forces.yptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->static_index.ptr()
+    );
+    std::cout << "Pair forces computed" << std::endl;
 }
 
 void Disk::compute_overlaps_impl() {

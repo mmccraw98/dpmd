@@ -1147,122 +1147,118 @@ __global__ void compute_hessian_kernel(
     double* __restrict__ hessian_it_iy, double* __restrict__ hessian_it_jy,
     double* __restrict__ hessian_it_it, double* __restrict__ hessian_it_jt
 ) {
-    const int Nv = md::geo::g_sys.n_vertices;
-    int u = blockIdx.x * blockDim.x + threadIdx.x;
-    if (u >= Nv) return;
-    const int sid = md::poly::g_vertex_sys.id[u];
+    const int N = md::geo::g_sys.n_particles;
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    const int sid = md::geo::g_sys.id[i];
     const double e_i = g_rigid_bumpy.e_interaction[sid];
     const double box_size_x = md::geo::g_box.size_x[sid];
     const double box_size_y = md::geo::g_box.size_y[sid];
     const double box_inv_x = md::geo::g_box.inv_x[sid];
     const double box_inv_y = md::geo::g_box.inv_y[sid];
-    const double x_u = vertex_pos_x[u], y_u = vertex_pos_y[u];
-    const double r_u = g_rigid_bumpy.vertex_rad[u];
-    const int pid = md::poly::g_poly.particle_id[u];
-    const double x_i = pos_x[pid], y_i = pos_y[pid];
-    const double rel_x_u = x_u - x_i;
-    const double rel_y_u = y_u - y_i;
-    std::array<double, 9> hessian_ia_ib = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    std::array<double, 9> hessian_ia_jb = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    const double x_i = pos_x[i], y_i = pos_y[i];
     
-    // loop over vertex neighbors
-    const int beg = md::geo::g_neigh.start[u];
-    const int end = md::geo::g_neigh.start[u+1];
-    for (int j = beg; j < end; j++) {
-        const int v = md::geo::g_neigh.ids[j];
-        const double x_v = vertex_pos_x[v], y_v = vertex_pos_y[v];
-        const double r_v = g_rigid_bumpy.vertex_rad[v];
-        double dx, dy;
-        double r2 = md::geo::disp_pbc_L(x_u, y_u, x_v, y_v, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
-        const double radsum = r_u + r_v;
-        const double radsum2 = radsum * radsum;
-        if (r2 >= radsum2) continue;
+    // loop over particle neighbors
+    const int beg = particle_neighbor_start[i];
+    const int end = particle_neighbor_start[i+1];
+    for (int k = beg; k < end; k++) {
+        const int j = particle_neighbor_ids[k];
 
-        const double r   = sqrt(r2);
-        const double inv = 1.0 / r;
-        const double nx  = dx * inv;
-        const double ny  = dy * inv;
+        const double x_j = pos_x[j], y_j = pos_y[j];
 
-        const double delta = radsum - r;
-        const double fmag  = e_i * delta;
+        // accumulate the hessian terms here
+        std::array<double, 9> hessian_ia_ib = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+        std::array<double, 9> hessian_ia_jb = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-        // hessian terms
-        double t_ij = - fmag;
-        double c_ij = e_i;
+        // loop over the vertices of particle i
+        for (int mu_unordered = md::poly::g_poly.particle_offset[i]; mu_unordered < md::poly::g_poly.particle_offset[i+1]; mu_unordered++) {
+            const int mu = md::poly::g_poly.static_index[mu_unordered];
+            const double x_mu = vertex_pos_x[mu], y_mu = vertex_pos_y[mu];
+            const double r_mu = g_rigid_bumpy.vertex_rad[mu];
+            const double rel_x_mu = x_mu - x_i;
+            const double rel_y_mu = y_mu - y_i;
+            // loop over the neighbors of the vertex
+            for (int nu_unordered = md::geo::g_neigh.start[mu]; nu_unordered < md::geo::g_neigh.start[mu+1]; nu_unordered++) {
+                const int nu = md::geo::g_neigh.ids[nu_unordered];
+                const int pid_nu = md::poly::g_poly.particle_id[nu];
+                if (pid_nu != j) continue;
+                const double x_nu = vertex_pos_x[nu], y_nu = vertex_pos_y[nu];
+                const double r_nu = g_rigid_bumpy.vertex_rad[nu];
+                double dx, dy;
+                double r2 = md::geo::disp_pbc_L(x_mu, y_mu, x_nu, y_nu, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+                const double radsum = r_mu + r_nu;
+                const double radsum2 = radsum * radsum;
+                if (r2 >= radsum2) continue;
+                const double r = sqrt(r2);
+                const double inv = 1.0 / r;
+                const double nx = dx * inv;
+                const double ny = dy * inv;
+                const double delta = radsum - r;
+                const double fmag = e_i * delta;
+                const double t_ij = - fmag;
+                const double c_ij = e_i;
 
-        const int pid_v = md::poly::g_poly.particle_id[v];
-        const double x_j = pos_x[pid_v], y_j = pos_y[pid_v];
-        const double rel_x_v = x_v - x_j;
-        const double rel_y_v = y_v - y_j;
+                const double rel_x_nu = x_nu - x_j;
+                const double rel_y_nu = y_nu - y_j;
 
-        // loop over the Hessian terms
-        for (int a = 0; a < 3; a++) {
-            for (int b = 0; b < 3; b++) {
-                // off-diagonal block
-                double d_ia_dx = (a == 0) - rel_y_u * (a == 2);
-                double d_ia_dy = (a == 1) + rel_x_u * (a == 2);
-                double d_jb_dx = -1.0 * ((b == 0) - rel_y_v * (b == 2));
-                double d_jb_dy = -1.0 * ((b == 1) + rel_x_v * (b == 2));
-
-                double q_ia = dx * d_ia_dx + dy * d_ia_dy;
-                double q_jb = dx * d_jb_dx + dy * d_jb_dy;
-
-                double d_ia_q_jb = (d_ia_dx * d_jb_dx + d_ia_dy * d_jb_dy) / r;  // there are no second derivatives here since i and j are different coordinates
-
-                hessian_ia_jb[a * 3 + b] += c_ij * q_ia * q_jb / r2 + t_ij * (d_ia_q_jb - q_ia * q_jb / (r2 * r));
-
-                // diagonal block
-                double d_ib_dx = (b == 0) - rel_y_u * (b == 2);
-                double d_ib_dy = (b == 1) + rel_x_u * (b == 2);
-
-                // there are now some second derivatives
-                double d_ia_ib_dx = - rel_x_u * (a == 2) * (b == 2);
-                double d_ia_ib_dy = - rel_y_u * (a == 2) * (b == 2);
-
-                double q_ib = dx * d_ib_dx + dy * d_ib_dy;
-
-                double d_ia_q_ib = (d_ia_dx * d_ib_dx + dx * d_ia_ib_dx + d_ia_dy * d_ib_dy + dy * d_ia_ib_dy) / r;
-
-                hessian_ia_ib[a * 3 + b] += c_ij * q_ia * q_ib / r2 + t_ij * (d_ia_q_ib - q_ia * q_ib / (r2 * r));
+                // loop over the Hessian terms
+                for (int a = 0; a < 3; a++) {
+                    for (int b = 0; b < 3; b++) {
+                        // off-diagonal block
+                        double d_ia_dx = (a == 0) - rel_y_mu * (a == 2);
+                        double d_ia_dy = (a == 1) + rel_x_mu * (a == 2);
+                        double d_jb_dx = -1.0 * ((b == 0) - rel_y_nu * (b == 2));
+                        double d_jb_dy = -1.0 * ((b == 1) + rel_x_nu * (b == 2));
+        
+                        double q_ia = dx * d_ia_dx + dy * d_ia_dy;
+                        double q_jb = dx * d_jb_dx + dy * d_jb_dy;
+        
+                        double d_ia_q_jb = (d_ia_dx * d_jb_dx + d_ia_dy * d_jb_dy) / r;  // there are no second derivatives here since i and j are different coordinates
+        
+                        hessian_ia_jb[a * 3 + b] += c_ij * q_ia * q_jb / r2 + t_ij * (d_ia_q_jb - q_ia * q_jb / (r2 * r));
+        
+                        // diagonal block
+                        double d_ib_dx = (b == 0) - rel_y_mu * (b == 2);
+                        double d_ib_dy = (b == 1) + rel_x_mu * (b == 2);
+        
+                        // there are now some second derivatives
+                        double d_ia_ib_dx = - rel_x_mu * (a == 2) * (b == 2);
+                        double d_ia_ib_dy = - rel_y_mu * (a == 2) * (b == 2);
+        
+                        double q_ib = dx * d_ib_dx + dy * d_ib_dy;
+        
+                        double d_ia_q_ib = (d_ia_dx * d_ib_dx + dx * d_ia_ib_dx + d_ia_dy * d_ib_dy + dy * d_ia_ib_dy) / r;
+        
+                        hessian_ia_ib[a * 3 + b] += c_ij * q_ia * q_ib / r2 + t_ij * (d_ia_q_ib - q_ia * q_ib / (r2 * r));
+                    }
+                }
             }
         }
 
-        // find the pair id for the particle pair
-        int pair_id = -1;
-        for (int p_k = particle_neighbor_start[pid]; p_k < particle_neighbor_start[pid+1]; p_k++) {
-            const int j = particle_neighbor_ids[p_k];
-            if (j == pid_v) {
-                pair_id = p_k;
-                break;
-            }
-        }
-        if (pair_id == -1) {
-            printf("ERROR");
-        }
         // set the pair ids
-        atomicExch(&pair_ids_i[pair_id], pid);
-        atomicExch(&pair_ids_j[pair_id], pid_v);
+        pair_ids_i[k] = i;
+        pair_ids_j[k] = j;
 
         // add the Hessian terms to the total Hessian
-        atomicAdd(&hessian_ix_ix[pair_id], hessian_ia_ib[0]);
-        atomicAdd(&hessian_ix_iy[pair_id], hessian_ia_ib[1]);
-        atomicAdd(&hessian_ix_it[pair_id], hessian_ia_ib[2]);
-        atomicAdd(&hessian_iy_ix[pair_id], hessian_ia_ib[3]);
-        atomicAdd(&hessian_iy_iy[pair_id], hessian_ia_ib[4]);
-        atomicAdd(&hessian_iy_it[pair_id], hessian_ia_ib[5]);
-        atomicAdd(&hessian_it_ix[pair_id], hessian_ia_ib[6]);
-        atomicAdd(&hessian_it_iy[pair_id], hessian_ia_ib[7]);
-        atomicAdd(&hessian_it_it[pair_id], hessian_ia_ib[8]);
+        hessian_ix_ix[k] += hessian_ia_ib[0];
+        hessian_ix_iy[k] += hessian_ia_ib[1];
+        hessian_ix_it[k] += hessian_ia_ib[2];
+        hessian_iy_ix[k] += hessian_ia_ib[3];
+        hessian_iy_iy[k] += hessian_ia_ib[4];
+        hessian_iy_it[k] += hessian_ia_ib[5];
+        hessian_it_ix[k] += hessian_ia_ib[6];
+        hessian_it_iy[k] += hessian_ia_ib[7];
+        hessian_it_it[k] += hessian_ia_ib[8];
 
-        atomicAdd(&hessian_ix_jx[pair_id], hessian_ia_jb[0]);
-        atomicAdd(&hessian_ix_jy[pair_id], hessian_ia_jb[1]);
-        atomicAdd(&hessian_ix_jt[pair_id], hessian_ia_jb[2]);
-        atomicAdd(&hessian_iy_jx[pair_id], hessian_ia_jb[3]);
-        atomicAdd(&hessian_iy_jy[pair_id], hessian_ia_jb[4]);
-        atomicAdd(&hessian_iy_jt[pair_id], hessian_ia_jb[5]);
-        atomicAdd(&hessian_it_jx[pair_id], hessian_ia_jb[6]);
-        atomicAdd(&hessian_it_jy[pair_id], hessian_ia_jb[7]);
-        atomicAdd(&hessian_it_jt[pair_id], hessian_ia_jb[8]);
+        hessian_ix_jx[k] += hessian_ia_jb[0];
+        hessian_ix_jy[k] += hessian_ia_jb[1];
+        hessian_ix_jt[k] += hessian_ia_jb[2];
+        hessian_iy_jx[k] += hessian_ia_jb[3];
+        hessian_iy_jy[k] += hessian_ia_jb[4];
+        hessian_iy_jt[k] += hessian_ia_jb[5];
+        hessian_it_jx[k] += hessian_ia_jb[6];
+        hessian_it_jy[k] += hessian_ia_jb[7];
+        hessian_it_jt[k] += hessian_ia_jb[8];
     }
 }
 
@@ -1718,9 +1714,9 @@ void RigidBumpy::compute_hessian_impl() {
     this->hessian_yt.fill(0.0, 0.0);
     this->hessian_ty.fill(0.0, 0.0);
     this->hessian_tt.fill(0.0, 0.0);
-    const int Nv = n_vertices();
+    const int N = n_particles();
     auto B = md::launch::threads_for();
-    auto G = md::launch::blocks_for(Nv);
+    auto G = md::launch::blocks_for(N);
     CUDA_LAUNCH(kernels::compute_hessian_kernel, G, B,
         this->vertex_pos.xptr(), this->vertex_pos.yptr(),
         this->pos.xptr(), this->pos.yptr(),
