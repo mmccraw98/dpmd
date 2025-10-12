@@ -128,6 +128,9 @@ public:
     // Compute the distances between each pair of particles
     void compute_pair_dist_impl();
 
+    // Compute the forces between each pair of particles
+    void compute_pair_forces_impl();
+
     // Compute the overlaps for each particle
     void compute_overlaps_impl();
 

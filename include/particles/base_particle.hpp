@@ -99,6 +99,7 @@ public:
     // Pairwise fields
     df::DeviceField2D<int>    pair_ids;   // (N_neighbors,2) - id of the two particles in the pairwise interaction
     df::DeviceField1D<double> pair_dist;  // (N_neighbors,) - distance between the pair of particles given by pair_ids
+    df::DeviceField2D<double> pair_forces; // (N_neighbors,2) - force between the pair of particles given by pair_ids
 
     // Neighbor method
     NeighborMethod neighbor_method = NeighborMethod::Naive;
@@ -650,6 +651,9 @@ public:
     // Compute the distances between each pair of particles
     void compute_pair_dist() { derived().compute_pair_dist_impl(); }
 
+    // Compute the forces between each pair of particles
+    void compute_pair_forces() { derived().compute_pair_forces_impl(); }
+
     // Compute the stress tensor for each system
     void compute_stress_tensor() { derived().compute_stress_tensor_impl(); }
 
@@ -890,6 +894,12 @@ public:
             reg.fields["pair_dist"] = p;
         }
         {
+            FieldSpec2D<double> p; 
+            p.preprocess = [this]{ this->compute_pair_forces(); };
+            p.get_device_field = [this]{ return &this->pair_forces; };
+            reg.fields["pair_forces"] = p;
+        }
+        {
             FieldSpec2D<int> p; 
             // p.preprocess = [this]{ this->compute_pair_dist(); };
             p.get_device_field = [this]{ return &this->pair_ids; };
@@ -1053,6 +1063,7 @@ protected:
     void compute_hessian_impl() {}
     void compute_pair_dist_impl() {}
     void compute_overlaps_impl() {}
+    void compute_pair_forces_impl() {}
     void save_state_impl(df::DeviceField1D<int>, int) {}
     void restore_state_impl(df::DeviceField1D<int>, int) {}
     void load_from_hdf5_group_impl(hid_t) {}

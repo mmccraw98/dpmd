@@ -1266,6 +1266,72 @@ __global__ void compute_hessian_kernel(
     }
 }
 
+__global__ void compute_particle_pair_forces_kernel(
+    const double* __restrict__ vertex_pos_x, const double* __restrict__ vertex_pos_y,
+    const int* __restrict__ particle_neighbor_start, const int* __restrict__ particle_neighbor_ids,
+    int* __restrict__ pair_ids_i, int* __restrict__ pair_ids_j,
+    double* __restrict__ pair_forces_x, double* __restrict__ pair_forces_y
+) {
+    const int Nv = md::geo::g_sys.n_vertices;
+    int u = blockIdx.x * blockDim.x + threadIdx.x;
+    if (u >= Nv) return;
+    const int sid = md::poly::g_vertex_sys.id[u];
+    const double e_i = g_rigid_bumpy.e_interaction[sid];
+    const double box_size_x = md::geo::g_box.size_x[sid];
+    const double box_size_y = md::geo::g_box.size_y[sid];
+    const double box_inv_x = md::geo::g_box.inv_x[sid];
+    const double box_inv_y = md::geo::g_box.inv_y[sid];
+    const double x_u = vertex_pos_x[u], y_u = vertex_pos_y[u];
+    const double r_u = g_rigid_bumpy.vertex_rad[u];
+    const int pid = md::poly::g_poly.particle_id[u];
+    
+    // loop over vertex neighbors
+    const int beg = md::geo::g_neigh.start[u];
+    const int end = md::geo::g_neigh.start[u+1];
+    for (int j = beg; j < end; j++) {
+        const int v = md::geo::g_neigh.ids[j];
+        const double x_v = vertex_pos_x[v], y_v = vertex_pos_y[v];
+        const double r_v = g_rigid_bumpy.vertex_rad[v];
+        double dx, dy;
+        double r2 = md::geo::disp_pbc_L(x_u, y_u, x_v, y_v, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
+        const double radsum = r_u + r_v;
+        const double radsum2 = radsum * radsum;
+        if (r2 >= radsum2) continue;
+
+        const double r   = sqrt(r2);
+        const double inv = 1.0 / r;
+        const double nx  = dx * inv;
+        const double ny  = dy * inv;
+
+        const double delta = radsum - r;
+        const double fmag  = e_i * delta;
+
+        double force_x = -fmag * nx;
+        double force_y = -fmag * ny;
+
+        // find the pair id for the particle pair
+        const int pid_v = md::poly::g_poly.particle_id[v];
+        int pair_id = -1;
+        for (int p_k = particle_neighbor_start[pid]; p_k < particle_neighbor_start[pid+1]; p_k++) {
+            const int j = particle_neighbor_ids[p_k];
+            if (j == pid_v) {
+                pair_id = p_k;
+                break;
+            }
+        }
+        if (pair_id == -1) {
+            printf("ERROR");
+        }
+        // set the pair ids
+        atomicExch(&pair_ids_i[pair_id], pid);
+        atomicExch(&pair_ids_j[pair_id], pid_v);
+
+        // set the forces
+        atomicAdd(&pair_forces_x[pair_id], force_x);
+        atomicAdd(&pair_forces_y[pair_id], force_y);
+    }
+}
+
 } // namespace kernels
 
 void RigidBumpy::compute_particle_forces() {
@@ -1599,6 +1665,22 @@ void RigidBumpy::compute_pair_dist_impl() {
         this->particle_neighbor_start.ptr(), this->particle_neighbor_ids.ptr(),
         this->pair_ids.xptr(), this->pair_ids.yptr(),
         this->pair_dist.ptr());
+}
+
+void RigidBumpy::compute_pair_forces_impl() {
+    const int N = n_particles();
+    if (this->pair_forces.size() != this->particle_neighbor_ids.size()) {
+        this->pair_forces.resize(this->particle_neighbor_ids.size());
+    }
+    this->pair_forces.fill(0.0, 0.0);
+    const int Nv = n_vertices();
+    auto B = md::launch::threads_for();
+    auto G = md::launch::blocks_for(Nv);
+    CUDA_LAUNCH(kernels::compute_particle_pair_forces_kernel, G, B,
+        this->vertex_pos.xptr(), this->vertex_pos.yptr(),
+        this->particle_neighbor_start.ptr(), this->particle_neighbor_ids.ptr(),
+        this->pair_ids.xptr(), this->pair_ids.yptr(),
+        this->pair_forces.xptr(), this->pair_forces.yptr());
 }
 
 void RigidBumpy::compute_overlaps_impl() {

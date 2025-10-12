@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
 
     io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 1, false);
     om.set_extra_init_fields({"pe_total", "box_size"});
-    om.set_extra_final_fields({"pe_total", "box_size", "packing_fraction", "n_contacts_total", "friction_coeff", "hessian_xx", "hessian_xy", "hessian_yx", "hessian_yy", "hessian_xt", "hessian_tx", "hessian_yt", "hessian_ty", "hessian_tt", "pair_ids"});
+    om.set_extra_final_fields({"pe_total", "box_size", "packing_fraction", "n_contacts_total", "friction_coeff", "hessian_xx", "hessian_xy", "hessian_yx", "hessian_yy", "hessian_xt", "hessian_tx", "hessian_yt", "hessian_ty", "hessian_tt", "pair_forces", "pair_ids"});
     om.initialize();
 
     df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);
