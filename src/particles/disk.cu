@@ -963,7 +963,6 @@ void Disk::compute_fpower_total_impl() {
 }
 
 void Disk::compute_contacts_impl() {
-    std::cout << "Computing contacts" << std::endl;
     const int N = n_particles();
     if (this->contacts.size() != N) {
         this->contacts.resize(N);
@@ -975,7 +974,6 @@ void Disk::compute_contacts_impl() {
         this->pos.xptr(), this->pos.yptr(),
         this->contacts.ptr()
     );
-    std::cout << "Contacts computed" << std::endl;
 }
 
 void Disk::compute_pair_dist_impl() {
@@ -1002,7 +1000,6 @@ void Disk::compute_pair_dist_impl() {
 }
 
 void Disk::compute_hessian_impl() {
-    std::cout << "Computing hessian" << std::endl;
     const int N = n_particles();
     if (this->hessian_xx.size() != n_neighbors()) {
         this->hessian_xx.resize(n_neighbors());
@@ -1034,11 +1031,9 @@ void Disk::compute_hessian_impl() {
         this->hessian_yx.xptr(), this->hessian_yx.yptr(),
         this->hessian_yy.xptr(), this->hessian_yy.yptr()
     );
-    std::cout << "Hessian computed" << std::endl;
 }
 
 void Disk::compute_pair_forces_impl() {
-    std::cout << "Computing pair forces" << std::endl;
     const int N = n_particles();
     if (this->pair_forces.size() != n_neighbors()) {
         this->pair_forces.resize(n_neighbors());
@@ -1055,7 +1050,6 @@ void Disk::compute_pair_forces_impl() {
         this->pair_ids.xptr(), this->pair_ids.yptr(),
         this->static_index.ptr()
     );
-    std::cout << "Pair forces computed" << std::endl;
 }
 
 void Disk::compute_overlaps_impl() {
