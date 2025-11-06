@@ -213,8 +213,8 @@ public:
         this->compute_stress_tensor();
         this->segmented_sum(this->stress_tensor_x.xptr(), this->stress_tensor_total_x.xptr(), 0);
         this->segmented_sum(this->stress_tensor_y.yptr(), this->stress_tensor_total_y.yptr(), 0);
-        this->segmented_sum(this->stress_tensor_x.yptr(), this->stress_tensor_total_y.xptr(), 0);
-        this->segmented_sum(this->stress_tensor_y.xptr(), this->stress_tensor_total_x.yptr(), 0);
+        this->segmented_sum(this->stress_tensor_x.yptr(), this->stress_tensor_total_x.yptr(), 0);
+        this->segmented_sum(this->stress_tensor_y.xptr(), this->stress_tensor_total_y.xptr(), 0);
     }
 
     // Load static data from hdf5 group and initialize the particle

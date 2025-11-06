@@ -258,4 +258,14 @@ __global__ void scatter_order_kernel(
     if (order_inv) order_inv[i] = dst;
 }
 
+__global__ void invert_static_index_kernel(
+    const int N,
+    const int* __restrict__ static_index,
+    int* __restrict__ static_index_inverse)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+    static_index_inverse[static_index[i]] = i;
+}
+
 }} // namespace md::geo

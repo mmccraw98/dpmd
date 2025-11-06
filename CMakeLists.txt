@@ -137,6 +137,8 @@ set(TEST_SOURCES
     tests/rigid_bumpy_jam_pbc.cu
     tests/disk_jam_pbc.cu
     tests/rigid_bumpy_calculate.cu
+    tests/disk_calculate.cu
+    tests/nve_rigid_bumpy_pbc_final_copy.cu
 )
 
 # Create test executables

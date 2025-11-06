@@ -1,4 +1,4 @@
-#include "particles/rigid_bumpy.cuh"
+#include "particles/disk.cuh"
 #include "utils/h5_io.hpp"
 #include "utils/device_fields.cuh"
 #include "utils/cuda_utils.cuh"
@@ -14,13 +14,15 @@ int main(int argc, char** argv) {
     std::string in_path = argv[1];
     std::string out_path = argv[2];
 
-    md::rigid_bumpy::RigidBumpy P;
+    md::disk::Disk P;
     P.load_from_hdf5(in_path, "init");
+
+    
 
     P.compute_forces();
 
-    io::OutputManager<md::rigid_bumpy::RigidBumpy> om(P, out_path, 1, false);
-    om.set_extra_final_fields({"pe_total", "box_size", "packing_fraction", "n_contacts_total", "friction_coeff", "hessian_xx", "hessian_xy", "hessian_yx", "hessian_yy", "hessian_xt", "hessian_tx", "hessian_yt", "hessian_ty", "hessian_tt", "pair_ids", "pair_vertex_contacts", "pair_forces"});
+    io::OutputManager<md::disk::Disk> om(P, out_path, 1, false);
+    om.set_extra_final_fields({"pe_total", "box_size", "packing_fraction", "n_contacts_total", "hessian_xx", "hessian_xy", "hessian_yx", "hessian_yy", "pair_forces", "pair_ids"});
     om.initialize();
     om.finalize();
 }

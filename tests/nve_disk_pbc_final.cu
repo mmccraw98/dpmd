@@ -31,7 +31,10 @@ int main(int argc, char** argv) {
     // om.set_trajectory_fields({"pos", "vel", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
     // om.set_trajectory_fields({"pos", "pressure", "temperature", "overlaps", "pe_total"});
     // om.set_trajectory_fields({"pos", "pe_total", "ke_total", "temperature", "pressure", "stress_tensor_total_x", "stress_tensor_total_y"});
-    om.set_trajectory_fields({"pos", "pe_total", "ke_total", "temperature", "stress_tensor_total_x", "stress_tensor_total_y", "pressure"});
+    // om.set_trajectory_fields({"pos", "vel", "pe_total", "ke_total", "temperature", "stress_tensor_total_x", "stress_tensor_total_y", "pressure"});
+    // om.set_trajectory_fields({"pos", "vel", "temperature", "pair_forces", "pair_ids", "pair_dist", "stress_tensor_total_x", "stress_tensor_total_y", "pressure"});
+    om.set_trajectory_fields({"pos", "vel", "pe_total", "ke_total", "temperature", "pressure"});
+    // om.set_trajectory_fields({"pe_total", "ke_total", "temperature"});
     om.set_trajectory_interval(save_increment);
     om.initialize();
 

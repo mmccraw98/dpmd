@@ -159,7 +159,7 @@ __device__ __forceinline__ double disp_pbc_arrays(double xi, double yi,
                                                   double& dx, double& dy) {
     const double lx = (box_size_x ? box_size_x[sid] : 0.0);
     const double ly = (box_size_y ? box_size_y[sid] : 0.0);
-    dx = xj - xi; dy = yj - yi;
+    dx = xi - xj; dy = yi - yj;
     // branchless nearest image
     dx = (lx > 0.0) ? (dx - lx * nearbyint(dx / lx)) : dx;
     dy = (ly > 0.0) ? (dy - ly * nearbyint(dy / ly)) : dy;
@@ -171,7 +171,7 @@ __device__ __forceinline__ double disp_pbc_L(double xi, double yi,
                                              double Lx, double Ly,
                                              double Lx_inv, double Ly_inv,
                                              double& dx, double& dy) {
-    dx = xj - xi; dy = yj - yi;
+    dx = xi - xj; dy = yi - yj;
     // branchless nearest image
     dx = (Lx > 0.0) ? (dx - Lx * nearbyint(dx * Lx_inv)) : dx;
     dy = (Ly > 0.0) ? (dy - Ly * nearbyint(dy * Ly_inv)) : dy;
@@ -203,12 +203,12 @@ __device__ __forceinline__ double disp_pbc_global(double xi, double yi,
     const double* bx = g_box.size_x;
     const double* by = g_box.size_y;
     if (!bx || !by || sid < 0 || sid >= g_sys.n_systems) {
-        dx = xj - xi; dy = yj - yi;
+        dx = xi - xj; dy = yi - yj;
         return dx*dx + dy*dy;
     }
     const double lx = bx[sid];
     const double ly = by[sid];
-    dx = xj - xi; dy = yj - yi;
+    dx = xi - xj; dy = yi - yj;
     dx = (lx > 0.0) ? (dx - lx * nearbyint(dx / lx)) : dx;
     dy = (ly > 0.0) ? (dy - ly * nearbyint(dy / ly)) : dy;
     return dx*dx + dy*dy;
@@ -288,5 +288,9 @@ __global__ void scatter_order_kernel(
     int* __restrict__ order,
     int* __restrict__ order_inv);
 
+__global__ void invert_static_index_kernel(
+    const int N,
+    const int* __restrict__ static_index,
+    int* __restrict__ static_index_inverse);
 
 }} // namespace md::geo

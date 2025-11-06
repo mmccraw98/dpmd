@@ -1,12 +1,13 @@
 // TODO: handling ragged array saving does not work properly.  once an array is deteced as ragged, its data up to that point is erased.  from then on, it is saved under a ragged group in the dataset
 // TODO: clean up pairwise calculations
 // TODO: implement morton / hilbert curves for cells
+// TODO: add different force functions (energy, stiffness, wca, lj, exponent)
+// TODO: add compile flag for force functions
 // TODO: add compile flag for using stiffness or energy interactions - add a function to handle?
-// TODO: implement hessian
+// TODO: add different boundary conditions for the distance calculation with a compile flag
 // TODO: add heirarchical pre-req calculations!!!!!!
 // TODO: make particle-agnostic loading method and scripts
 // TODO: add console log
-// TODO: add disk state reversion
 // TODO: debate adding energy log
 // TODO: fix bugs with memory access, probably due to improperly formatted input data
 // TODO: add output manager configs and run argument configs - probably the same thing

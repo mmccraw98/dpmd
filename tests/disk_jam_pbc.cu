@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
     
     io::OutputManager<md::disk::Disk> om(P, out_path, 1, false);
     om.set_extra_init_fields({"pe_total", "box_size"});
-    om.set_extra_final_fields({"pe_total", "box_size", "packing_fraction", "n_contacts_total", "hessian_xx", "hessian_xy", "hessian_yx", "hessian_yy", "pair_forces", "pair_ids"});
+    om.set_extra_final_fields({"pe_total", "box_size", "packing_fraction", "n_contacts_total", "hessian_xx", "hessian_xy", "hessian_yx", "hessian_yy", "pair_forces", "pair_ids", "pair_dist"});
     om.initialize();
 
     df::DeviceField1D<double> dt; dt.resize(P.n_systems()); dt.fill(dt_scale);

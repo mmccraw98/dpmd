@@ -208,9 +208,8 @@ __global__ void compute_pair_forces_kernel(
         const double delta = radsum - r;
         const double fmag  = e_i * delta;
 
-        // Force on i is along -n (repulsion)
-        fxi -= fmag * nx;
-        fyi -= fmag * ny;
+        fxi += fmag * nx;
+        fyi += fmag * ny;
 
         // Single-count the pair energy (each pair gets half)
         pei += (0.5 * e_i * delta * delta) * 0.5;
@@ -295,9 +294,8 @@ __global__ void compute_wall_forces_kernel(
         const double delta = radsum - r;
         const double fmag  = e_i * delta;
 
-        // Force on i is along -n (repulsion)
-        fxi -= fmag * nx;
-        fyi -= fmag * ny;
+        fxi += fmag * nx;
+        fyi += fmag * ny;
 
         // Single-count the pair energy (each pair gets half)
         pei += (0.5 * e_i * delta * delta) * 0.5;
@@ -878,9 +876,8 @@ __global__ void compute_friction_coeff_kernel(
                 const double delta = radsum - r;
                 const double fmag  = e_i * delta;
 
-                // Force on i is along -n (repulsion)
-                force_x -= fmag * nx;
-                force_y -= fmag * ny;
+                force_x += fmag * nx;
+                force_y += fmag * ny;
             }
         }
         double normal_x = dist_x / r_particle;
@@ -1027,15 +1024,14 @@ __global__ void compute_stress_tensor_virial_kernel(
         const double delta = radsum - r;
         const double fmag  = e_i * delta;
 
-        // Force on i is along -n (repulsion)
-        double force_x = -fmag * nx;
-        double force_y = -fmag * ny;
+        double force_x = fmag * nx;
+        double force_y = fmag * ny;
 
         // divide by 2 to avoid double counting
-        stress_tensor_x_x_acc += -dx_p * force_x / 2.0;
-        stress_tensor_x_y_acc += -dx_p * force_y / 2.0;
-        stress_tensor_y_x_acc += -dy_p * force_x / 2.0;
-        stress_tensor_y_y_acc += -dy_p * force_y / 2.0;
+        stress_tensor_x_x_acc += dx_p * force_x / 2.0;
+        stress_tensor_x_y_acc += dx_p * force_y / 2.0;
+        stress_tensor_y_x_acc += dy_p * force_x / 2.0;
+        stress_tensor_y_y_acc += dy_p * force_y / 2.0;
     }
 
     // atomic add the stress tensor to the particle level
@@ -1302,8 +1298,8 @@ __global__ void compute_particle_pair_forces_kernel(
         const double delta = radsum - r;
         const double fmag  = e_i * delta;
 
-        double force_x = -fmag * nx;
-        double force_y = -fmag * ny;
+        double force_x = fmag * nx;
+        double force_y = fmag * ny;
 
         // find the pair id for the particle pair
         const int pid_v = md::poly::g_poly.particle_id[v];

@@ -147,9 +147,8 @@ __global__ void compute_pair_forces_kernel(
         const double delta = radsum - r;
         const double fmag  = e_i * delta;
 
-        // Force on i is along -n (repulsion)
-        fxi -= fmag * nx;
-        fyi -= fmag * ny;
+        fxi += fmag * nx;
+        fyi += fmag * ny;
 
         // Single-count the pair energy (each pair gets half)
         pei += (0.5 * e_i * delta * delta) * 0.5;
@@ -234,9 +233,8 @@ __global__ void compute_wall_forces_kernel(
         const double delta = radsum - r;
         const double fmag  = e_i * delta;
 
-        // Force on i is along -n (repulsion)
-        fxi -= fmag * nx;
-        fyi -= fmag * ny;
+        fxi += fmag * nx;
+        fyi += fmag * ny;
 
         // Single-count the pair energy (each pair gets half)
         pei += (0.5 * e_i * delta * delta) * 0.5;
@@ -478,13 +476,13 @@ __global__ void compute_pair_dist_kernel(
     const double* __restrict__ y,
     int* __restrict__ pair_ids_i, 
     int* __restrict__ pair_ids_j,
-    const int* __restrict__ static_index,
+    const int* __restrict__ static_index_inverse,
     double* __restrict__ pair_dist
 ) {
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
-    const int i_static = static_index[i];
+    const int i_static = static_index_inverse[i];
 
     const int sid = md::geo::g_sys.id[i];
     const double box_size_x = md::geo::g_box.size_x[sid];
@@ -506,7 +504,7 @@ __global__ void compute_pair_dist_kernel(
 
         pair_dist[k] = sqrt(r2);
         pair_ids_i[k] = i_static;
-        pair_ids_j[k] = static_index[j];
+        pair_ids_j[k] = static_index_inverse[j];
     }
 }
 
@@ -517,12 +515,12 @@ __global__ void compute_particle_pair_forces_kernel(
     double* __restrict__ pair_forces_y,
     int* __restrict__ pair_ids_i, 
     int* __restrict__ pair_ids_j,
-    const int* __restrict__ static_index
+    const int* __restrict__ static_index_inverse
 ) {
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
-    const int i_static = static_index[i];
+    const int i_static = static_index_inverse[i];
 
     const int sid = md::geo::g_sys.id[i];
     const double e_i = g_disk.e_interaction[sid];
@@ -546,22 +544,21 @@ __global__ void compute_particle_pair_forces_kernel(
         // Early reject if no overlap: r^2 >= (ri+rj)^2
         const double radsum = ri + rj;
         const double radsum2 = radsum * radsum;
+        pair_ids_i[k] = i_static;
+        pair_ids_j[k] = static_index_inverse[j];
         if (r2 >= radsum2) continue;
-
+        
         // Overlap: compute r and invr once
         const double r   = sqrt(r2);
         const double inv = 1.0 / r;
         const double nx  = dx * inv;
         const double ny  = dy * inv;
-
+        
         const double delta = radsum - r;
         const double fmag  = e_i * delta;
-
-        // Force on i is along -n (repulsion)
-        pair_forces_x[k] -= fmag * nx;
-        pair_forces_y[k] -= fmag * ny;
-        pair_ids_i[k] = i_static;
-        pair_ids_j[k] = static_index[j];
+        
+        pair_forces_x[k] += fmag * nx;
+        pair_forces_y[k] += fmag * ny;
     }
 }
 
@@ -570,7 +567,7 @@ __global__ void compute_hessian_kernel(
     const double* __restrict__ y,
     int* __restrict__ pair_ids_i,
     int* __restrict__ pair_ids_j,
-    const int* __restrict__ static_index,
+    const int* __restrict__ static_index_inverse,
     double* __restrict__ hessian_ix_ix, double* __restrict__ hessian_ix_jx,
     double* __restrict__ hessian_ix_iy, double* __restrict__ hessian_ix_jy,
     double* __restrict__ hessian_iy_ix, double* __restrict__ hessian_iy_jx,
@@ -579,7 +576,7 @@ __global__ void compute_hessian_kernel(
     const int N = md::geo::g_sys.n_particles;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= N) return;
-    const int i_static = static_index[i];
+    const int i_static = static_index_inverse[i];
 
     const int sid = md::geo::g_sys.id[i];
     const double e_i = g_disk.e_interaction[sid];
@@ -603,6 +600,8 @@ __global__ void compute_hessian_kernel(
         double r2 = md::geo::disp_pbc_L(xi, yi, xj, yj, box_size_x, box_size_y, box_inv_x, box_inv_y, dx, dy);
         const double radsum = ri + rj;
         const double radsum2 = radsum * radsum;
+        pair_ids_i[k] = i_static;
+        pair_ids_j[k] = static_index_inverse[j];
         if (r2 >= radsum2) continue;
 
         const double r = sqrt(r2);
@@ -649,8 +648,6 @@ __global__ void compute_hessian_kernel(
                 hessian_ia_ib[a * 2 + b] += c_ij * (q_ia * q_ib) / (r2) + t_ij * (d_ia_q_ib / r - (q_ia * q_ib) / (r2 * r));
             }
         }
-        pair_ids_i[k] = i_static;
-        pair_ids_j[k] = static_index[j];
         hessian_ix_ix[k] += hessian_ia_ib[0];
         hessian_ix_iy[k] += hessian_ia_ib[1];
         hessian_iy_ix[k] += hessian_ia_ib[2];
@@ -756,13 +753,13 @@ __global__ void compute_stress_tensor_kernel(
         const double delta = radsum - r;
         const double fmag = e_i * delta;
 
-        const double force_x = -fmag * nx;
-        const double force_y = -fmag * ny;
+        const double force_x = fmag * nx;
+        const double force_y = fmag * ny;
 
-        stress_tensor_xx_acc += -dx * force_x / 2.0;
-        stress_tensor_xy_acc += -dx * force_y / 2.0;
-        stress_tensor_yx_acc += -dy * force_x / 2.0;
-        stress_tensor_yy_acc += -dy * force_y / 2.0;
+        stress_tensor_xx_acc += dx * force_x / 2.0;
+        stress_tensor_xy_acc += dx * force_y / 2.0;
+        stress_tensor_yx_acc += dy * force_x / 2.0;
+        stress_tensor_yy_acc += dy * force_y / 2.0;
     }
 
     stress_tensor_xx[i] = stress_tensor_xx_acc / box_area;
@@ -981,6 +978,7 @@ void Disk::compute_pair_dist_impl() {
         this->static_index.resize(n_particles());
         thrust::sequence(this->static_index.begin(), this->static_index.end(), 0);
     }
+    this->invert_static_index();
     const int N = n_particles();
     auto B = md::launch::threads_for();
     auto G = md::launch::blocks_for(N);
@@ -1001,6 +999,11 @@ void Disk::compute_pair_dist_impl() {
 
 void Disk::compute_hessian_impl() {
     const int N = n_particles();
+    if (this->static_index.size() != n_particles()) {  // requirement for compatibility with cell-list
+        this->static_index.resize(n_particles());
+        thrust::sequence(this->static_index.begin(), this->static_index.end(), 0);
+    }
+    this->invert_static_index();
     if (this->hessian_xx.size() != n_neighbors()) {
         this->hessian_xx.resize(n_neighbors());
     }
@@ -1035,6 +1038,11 @@ void Disk::compute_hessian_impl() {
 
 void Disk::compute_pair_forces_impl() {
     const int N = n_particles();
+    if (this->static_index.size() != n_particles()) {  // requirement for compatibility with cell-list
+        this->static_index.resize(n_particles());
+        thrust::sequence(this->static_index.begin(), this->static_index.end(), 0);
+    }
+    this->invert_static_index();
     if (this->pair_forces.size() != n_neighbors()) {
         this->pair_forces.resize(n_neighbors());
     }
@@ -1048,7 +1056,7 @@ void Disk::compute_pair_forces_impl() {
         this->pos.xptr(), this->pos.yptr(),
         this->pair_forces.xptr(), this->pair_forces.yptr(),
         this->pair_ids.xptr(), this->pair_ids.yptr(),
-        this->static_index.ptr()
+        this->static_index_inverse.ptr()
     );
 }
 

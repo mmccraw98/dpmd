@@ -804,6 +804,7 @@ private:
             if (traj_file_ >= 0) {
                 std::string full = "/" + name;
                 if (h5_link_exists(traj_file_, full)) {
+                    std::cout << "DELETING " << full << std::endl;
                     H5Ldelete(traj_file_, full.c_str(), H5P_DEFAULT);
                 }
             }

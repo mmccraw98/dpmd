@@ -55,6 +55,7 @@ public:
     df::DeviceField1D<int>    order;          // (N,) - sorted particle index
     df::DeviceField1D<int>    order_inv;      // (N,) - inverse of the sorted particle index
     df::DeviceField1D<int>    static_index;   // (N,) - index of the particle in the static order, used for undoing the cell-list sorting
+    df::DeviceField1D<int>    static_index_inverse;
     df::DeviceField2D<double> cell_size;         // (S,2) [Lx,Ly] - size of the cell for each system
     df::DeviceField2D<double> cell_inv;          // (S,2) [1/Lx,1/Ly] - inverse of the cell size for each system
     df::DeviceField2D<int>    cell_dim;          // (S,2) [Nx,Ny] - number of cells in each dimension for each system
@@ -404,6 +405,15 @@ public:
 
     // Update the static index
     void update_static_index() { derived().update_static_index_impl(); }
+
+    // Invert the static index
+    void invert_static_index() {
+        const int N = static_index.size();
+        if (static_index_inverse.size() != N) { static_index_inverse.resize(N); }
+        auto B = md::launch::threads_for();
+        auto G = md::launch::blocks_for(N);
+        CUDA_LAUNCH(md::geo::invert_static_index_kernel, G, B, N, static_index.ptr(), static_index_inverse.ptr());
+    }
 
     // Update the cell neighbor list
     void update_cell_neighbors() {
